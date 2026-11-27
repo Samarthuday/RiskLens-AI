@@ -1,7 +1,10 @@
 """RiskLens AI REST API and static dashboard."""
 
 import asyncio
+import hmac
 import json
+import os
+import secrets
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
@@ -12,12 +15,14 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import ROOT, get_settings
-from app.database import Store
+from app.database import ACTIVE_SESSION_ID, Store
 from app.features import FEATURE_SCHEMA_VERSION, build_feature_vector
 from app.investigation import investigate
 from app.model import compatibility_warnings, explain, load_artifact, predict
+from app.payments import WebhookError, normalize_payment_event, verify_signature
 from app.policy import PolicyCosts, simulate_policy
 from app.schemas import (
     InvestigationRequest,
@@ -26,7 +31,7 @@ from app.schemas import (
     TransactionCreate,
     TransactionScoreRequest,
 )
-from app.simulator import Simulator
+from app.simulator import SimulatorPool
 
 METRICS_PATH = ROOT / "research/reported_metrics.json"
 PUBLIC_PATH = ROOT / "public"
@@ -103,18 +108,81 @@ class RequestBodyLimitMiddleware:
         await self.app(scope, replay_body, send)
 
 
+class SessionStoreMiddleware:
+    """Select an isolated SQLite store using the signed, HTTP-only session cookie."""
+
+    def __init__(self, app, store: Store, max_sessions: int = 500):
+        self.app = app
+        self.store = store
+        self.max_sessions = max_sessions
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        session = scope.get("session")
+        if session is None:
+            raise RuntimeError("SessionMiddleware must wrap SessionStoreMiddleware.")
+        session_id = session.get("risklens_session_id")
+        if not isinstance(session_id, str) or len(session_id) < 32:
+            session_id = secrets.token_urlsafe(32)
+            session["risklens_session_id"] = session_id
+            self.store.prune_expired_sessions(max_sessions=self.max_sessions, preserve_session_id=session_id)
+        token = ACTIVE_SESSION_ID.set(session_id)
+        try:
+            await self.app(scope, receive, send)
+            path = self.store.session_path(session_id)
+            if path.exists():
+                os.utime(path, None)
+        finally:
+            ACTIVE_SESSION_ID.reset(token)
+
+
+class RequestMetricsMiddleware:
+    """Persist status and full request latency for API requests per browser session."""
+
+    def __init__(self, app, store: Store):
+        self.app = app
+        self.store = store
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] != "http" or not path.startswith("/api/v1/") or path in {
+            "/api/v1/health", "/api/v1/ready", "/api/v1/monitoring/metrics",
+        }:
+            await self.app(scope, receive, send)
+            return
+        started = time.perf_counter()
+        status_code = 500
+
+        async def capture(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = int(message["status"])
+            await send(message)
+
+        try:
+            await self.app(scope, receive, capture)
+        finally:
+            try:
+                self.store.record_request(path, status_code, (time.perf_counter() - started) * 1000)
+            except Exception:
+                # Observability must not convert a successful API response into a failure.
+                pass
+
+
 def _public_transaction(row: dict) -> dict:
     result = dict(row)
     result["simulated"] = result.get("source") == "simulator"
     return result
 
 
-def create_app(model_path: Path | None = None, database_path: Path | None = None) -> FastAPI:
+def create_app(model_path: Path | None = None, database_path: Path | None = None, *, session_isolation: bool = False) -> FastAPI:
     settings = get_settings()
     resolved_model_path = model_path or settings.model_path
     artifact, model_error, checksum = load_artifact(resolved_model_path, settings.model_sha256)
     store = Store(database_path)
-    simulator = Simulator(settings.demo_seed)
+    simulator = SimulatorPool(settings.demo_seed, settings.max_demo_sessions)
     app = FastAPI(
         title="RiskLens AI — Transaction Surveillance",
         description="Synthetic suspicious-activity monitoring, evidence-based investigations, and optional version-compatible model inference.",
@@ -130,6 +198,14 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
     app.state.model_sha256 = checksum
     app.add_middleware(RequestGuard, limit_per_minute=settings.rate_limit_per_minute)
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1_000_000)
+    app.add_middleware(RequestMetricsMiddleware, store=store)
+    if session_isolation:
+        store.prune_expired_sessions(max_sessions=settings.max_demo_sessions)
+        # Middleware wraps in reverse registration order: sessions must be outermost.
+        app.add_middleware(SessionStoreMiddleware, store=store, max_sessions=settings.max_demo_sessions)
+        app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, max_age=7 * 24 * 60 * 60,
+                           same_site="lax", https_only=settings.session_cookie_secure,
+                           session_cookie="risklens_session")
 
     @app.get("/health")
     @app.get("/api/v1/health")
@@ -198,6 +274,55 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
         items, total = store.transaction_history(row, limit)
         return {"items": [_public_transaction(item) for item in items], "count": len(items), "total": total}
 
+    @app.post("/api/v1/webhooks/razorpay", status_code=202)
+    async def razorpay_webhook(request: Request):
+        if settings.razorpay_mode != "test" or not settings.razorpay_test_webhook_secret:
+            raise HTTPException(503, "Razorpay Test Mode webhook intake is not configured.")
+        raw_body = await request.body()
+        signature = request.headers.get("x-razorpay-signature", "")
+        if not verify_signature(raw_body, signature, settings.razorpay_test_webhook_secret):
+            raise HTTPException(401, "Webhook signature is invalid.")
+        event_id = request.headers.get("x-razorpay-event-id", "")
+        try:
+            event = normalize_payment_event(raw_body, event_id, datetime.now(timezone.utc).isoformat())
+        except WebhookError as error:
+            raise HTTPException(422, str(error)) from error
+        # Processor events are in a separate owner-managed store, not any browser's session DB.
+        with store.base_scope():
+            inserted, snapshot = store.accept_razorpay_event(event)
+        return {"accepted": inserted, "duplicate": not inserted,
+                "payment_id": snapshot.get("payment_id"), "processing": "durably_received"}
+
+    @app.get("/api/v1/payments")
+    async def razorpay_payments(
+        request: Request,
+        limit: int = Query(100, ge=1, le=500),
+        status: str | None = Query(None, max_length=32),
+        currency: str | None = Query(None, min_length=3, max_length=3),
+        method: str | None = Query(None, max_length=32),
+        q: str | None = Query(None, max_length=128),
+    ):
+        expected = settings.razorpay_test_read_token
+        authorization = request.headers.get("authorization", "")
+        if not expected or not hmac.compare_digest(authorization, f"Bearer {expected}"):
+            raise HTTPException(403, "Payment event records require the owner read token.")
+        with store.base_scope():
+            items, total = store.list_razorpay_payments(limit, status, currency, method, q)
+        return {"items": items, "count": len(items), "total": total,
+                "scope": "Razorpay Test Mode fields only; amounts remain in provider currency subunits; no AML probability is produced."}
+
+    @app.get("/api/v1/payments/{payment_id}/events")
+    async def razorpay_payment_events(payment_id: str, request: Request, limit: int = Query(100, ge=1, le=500)):
+        expected = settings.razorpay_test_read_token
+        authorization = request.headers.get("authorization", "")
+        if not expected or not hmac.compare_digest(authorization, f"Bearer {expected}"):
+            raise HTTPException(403, "Payment event records require the owner read token.")
+        with store.base_scope():
+            items = store.list_razorpay_events(payment_id, limit)
+        if not items:
+            raise HTTPException(404, "payment event history not found")
+        return {"payment_id": payment_id, "items": items, "count": len(items)}
+
     @app.post("/api/v1/risk/score")
     async def score_transaction(payload: TransactionScoreRequest):
         if artifact is None:
@@ -222,8 +347,11 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
         row = store.get_transaction(payload.transaction_id)
         if row is None:
             raise HTTPException(404, "transaction not found")
-        report = await asyncio.to_thread(investigate, store, row, artifact, payload)
-        return report
+        try:
+            return await asyncio.to_thread(investigate, store, row, artifact, payload)
+        except Exception as error:
+            store.audit(None, row["transaction_id"], "investigation_failed", {"error_type": type(error).__name__})
+            raise
 
     @app.get("/api/v1/risk/explanation/{transaction_id}")
     async def explain_transaction(transaction_id: str):
@@ -305,41 +433,44 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
 
     @app.post("/api/v1/policies/simulate")
     async def policies_simulate(payload: PolicySimulationRequest):
-        costs = PolicyCosts(payload.false_positive_cost, payload.missed_event_cost, payload.manual_review_cost)
+        costs = PolicyCosts(payload.false_positive_cost, payload.missed_event_cost, payload.manual_review_cost,
+                            payload.review_effectiveness)
         return simulate_policy(payload.probabilities, payload.alert_budget, costs)
 
     @app.get("/api/v1/simulation/status")
     async def simulation_status():
-        return simulator.status()
+        return simulator.for_session(ACTIVE_SESSION_ID.get()).status()
 
     @app.post("/api/v1/simulation/reset")
     async def simulation_reset(scenario: str = Query("burst", pattern="^(burst|routine)$"), count: int = Query(36, ge=1, le=500)):
+        active_simulator = simulator.for_session(ACTIVE_SESSION_ID.get())
         removed = store.reset_simulated_transactions()
-        records = simulator.reset(scenario, count)
+        records = active_simulator.reset(scenario, count)
         saved = [store.add_transaction(record.model_dump(mode="python")) for record in records]
         store.audit(None, None, "demo_simulation_seeded", {"scenario": scenario, "count": len(saved), "seed": settings.demo_seed, "removed": removed})
-        return {"status": simulator.status(), "inserted": len(saved), "scenario": scenario, "synthetic": True}
+        return {"status": active_simulator.status(), "inserted": len(saved), "scenario": scenario, "synthetic": True}
 
     @app.post("/api/v1/simulation/start")
     async def simulation_start():
-        return simulator.start()
+        return simulator.for_session(ACTIVE_SESSION_ID.get()).start()
 
     @app.post("/api/v1/simulation/pause")
     async def simulation_pause():
-        return simulator.pause()
+        return simulator.for_session(ACTIVE_SESSION_ID.get()).pause()
 
     @app.post("/api/v1/simulation/step")
     async def simulation_step(count: int = Query(5, ge=1, le=50)):
-        if not simulator.running:
+        active_simulator = simulator.for_session(ACTIVE_SESSION_ID.get())
+        if not active_simulator.running:
             raise HTTPException(409, "simulation is paused")
-        records = simulator.next_batch(count)
+        records = active_simulator.next_batch(count)
         saved = [store.add_transaction(record.model_dump(mode="python")) for record in records]
         store.audit(None, None, "demo_simulation_step", {"count": len(saved), "seed": settings.demo_seed})
-        return {"inserted": [_public_transaction(row) for row in saved], "status": simulator.status()}
+        return {"inserted": [_public_transaction(row) for row in saved], "status": active_simulator.status()}
 
     if PUBLIC_PATH.exists():
         app.mount("/", StaticFiles(directory=str(PUBLIC_PATH), html=True), name="frontend")
     return app
 
 
-app = create_app()
+app = create_app(session_isolation=get_settings().session_isolation)

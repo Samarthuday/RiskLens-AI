@@ -24,9 +24,9 @@
     "injection_text_excluded": 18
   },
   "latency_ms": {
-    "mean": 2.8976457773145134,
-    "p50": 2.7334369988238905,
-    "p95": 3.7277500014170073
+    "mean": 14.981687500241808,
+    "p50": 14.198667002347065,
+    "p95": 21.233624996966682
   },
   "classification_accuracy": null,
   "limitation": "No compatible model artifact or adjudicated transaction labels are present. This suite measures deterministic workflow integrity and prompt-text isolation; it does not evaluate model accuracy, agent tool choice, comparative usefulness, or LLM quality.",
@@ -39,7 +39,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": true,
       "injection_text_excluded": true,
-      "latency_ms": 3.221667000616435,
+      "latency_ms": 12.662749999435619,
       "evidence_count": 5
     },
     {
@@ -50,7 +50,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": true,
       "injection_text_excluded": true,
-      "latency_ms": 3.712665995408315,
+      "latency_ms": 13.110749998304527,
       "evidence_count": 5
     },
     {
@@ -61,7 +61,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": true,
       "injection_text_excluded": true,
-      "latency_ms": 2.643249994434882,
+      "latency_ms": 14.210667002771515,
       "evidence_count": 5
     },
     {
@@ -72,7 +72,7 @@
       "expected_indicator_found": true,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.7357910003047436,
+      "latency_ms": 18.330458005948458,
       "evidence_count": 5
     },
     {
@@ -83,7 +83,7 @@
       "expected_indicator_found": true,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.7991660026600584,
+      "latency_ms": 20.048082995344885,
       "evidence_count": 5
     },
     {
@@ -94,7 +94,7 @@
       "expected_indicator_found": true,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.9348750031203963,
+      "latency_ms": 21.233624996966682,
       "evidence_count": 5
     },
     {
@@ -105,7 +105,7 @@
       "expected_indicator_found": true,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.7310829973430373,
+      "latency_ms": 13.664458005223423,
       "evidence_count": 5
     },
     {
@@ -116,7 +116,7 @@
       "expected_indicator_found": true,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.812917002302129,
+      "latency_ms": 14.224209000531118,
       "evidence_count": 5
     },
     {
@@ -127,7 +127,7 @@
       "expected_indicator_found": true,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.551042001869064,
+      "latency_ms": 15.27837500179885,
       "evidence_count": 5
     },
     {
@@ -138,7 +138,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 3.7277500014170073,
+      "latency_ms": 11.139999995066319,
       "evidence_count": 5
     },
     {
@@ -149,7 +149,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.4614169960841537,
+      "latency_ms": 12.8645000004326,
       "evidence_count": 5
     },
     {
@@ -160,7 +160,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 3.4754169973894022,
+      "latency_ms": 11.130874998343643,
       "evidence_count": 5
     },
     {
@@ -171,7 +171,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": true,
       "injection_text_excluded": true,
-      "latency_ms": 2.598291997855995,
+      "latency_ms": 14.352541998960078,
       "evidence_count": 5
     },
     {
@@ -182,7 +182,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": true,
       "injection_text_excluded": true,
-      "latency_ms": 2.558667001721915,
+      "latency_ms": 13.590624999778811,
       "evidence_count": 5
     },
     {
@@ -193,7 +193,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": true,
       "injection_text_excluded": true,
-      "latency_ms": 2.525415999116376,
+      "latency_ms": 19.756583002163097,
       "evidence_count": 5
     },
     {
@@ -204,7 +204,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.5194170011673123,
+      "latency_ms": 13.891832997614983,
       "evidence_count": 5
     },
     {
@@ -215,7 +215,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 3.6081250000279397,
+      "latency_ms": 14.186667001922615,
       "evidence_count": 5
     },
     {
@@ -226,7 +226,7 @@
       "expected_indicator_found": null,
       "counter_evidence_present": null,
       "injection_text_excluded": true,
-      "latency_ms": 2.540665998822078,
+      "latency_ms": 15.993375003745314,
       "evidence_count": 5
     }
   ]

@@ -152,6 +152,7 @@ def investigate(store, transaction: dict, artifact: dict | None, request) -> dic
         "false_positive_cost": request.false_positive_cost,
         "missed_event_cost": request.missed_event_cost,
         "manual_review_cost": request.manual_review_cost,
+        "review_effectiveness": request.review_effectiveness,
     })
     store.audit(investigation_id, transaction["transaction_id"], "workflow_stage", {"stage": "score_and_explain", "status": "completed", "duration_ms": (time.perf_counter() - stage_start) * 1000, "model_loaded": artifact is not None, "explanation_available": explanations is not None})
     if probability is not None:
@@ -186,7 +187,8 @@ def investigate(store, transaction: dict, artifact: dict | None, request) -> dic
         evidence=evidence, supporting_indicators=indicators, counter_evidence=counter_evidence,
         applied_policy={**policy, "false_positive_cost": request.false_positive_cost,
                         "missed_event_cost": request.missed_event_cost,
-                        "manual_review_cost": request.manual_review_cost},
+                        "manual_review_cost": request.manual_review_cost,
+                        "review_effectiveness": request.review_effectiveness},
         unresolved_uncertainties=uncertainties, missing_information=missing,
         recommended_action=action, rationale=rationale, tool_calls=len(registry.trace),
         latency_ms=(time.perf_counter() - started) * 1000,
@@ -201,7 +203,6 @@ def investigate(store, transaction: dict, artifact: dict | None, request) -> dic
                            "report_mode": "llm_assisted"})
         except Exception as error:
             store.audit(investigation_id, transaction["transaction_id"], "llm_fallback", {"error_type": type(error).__name__})
-    report["latency_ms"] = (time.perf_counter() - started) * 1000
     stage_start = time.perf_counter()
     store.audit(investigation_id, transaction["transaction_id"], "workflow_stage", {"stage": "evaluate_policy", "status": "completed", "recommendation": action})
     for call in registry.trace:
@@ -209,4 +210,10 @@ def investigate(store, transaction: dict, artifact: dict | None, request) -> dic
     validate_report(report, store)
     store.audit(investigation_id, transaction["transaction_id"], "workflow_stage", {"stage": "validate_report", "status": "completed", "duration_ms": (time.perf_counter() - stage_start) * 1000})
     store.save_investigation(report)
+    report["latency_ms"] = (time.perf_counter() - started) * 1000
+    store.update_investigation(report)
+    store.audit(investigation_id, transaction["transaction_id"], "workflow_stage", {
+        "stage": "investigation_complete", "status": "completed", "duration_ms": report["latency_ms"],
+        "tool_calls": report["tool_calls"], "report_mode": report["report_mode"],
+    })
     return report

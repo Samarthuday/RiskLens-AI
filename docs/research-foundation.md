@@ -37,22 +37,24 @@ The contract test suite covers point-in-time exclusion, 24-hour/30-day boundarie
 
 ## Artifact availability and recovery
 
-At audit time, the research checkout had **no** `artifacts/risk_model.joblib` and no processed feature set. A 950 MB CSV object existed in local Git LFS storage, but the source `data/README.md` identifies SAML-D as CC BY-NC-SA 4.0 and says the raw dataset is intentionally not committed. RiskLens does not copy or redistribute it.
+At the readiness-report audit time, the source checkout had a legacy artifact that RiskLens correctly rejects. It also contains a local licensed 950 MB raw CSV and a generated feature parquet, neither of which is copied into this repository. The source `data/README.md` identifies SAML-D as CC BY-NC-SA 4.0; that does not establish unrestricted commercial use or distribution rights.
 
-There is therefore no existing model artifact checksum to publish. Do not interpret the research metrics as proof that the binary is present. To recover an artifact, obtain the licensed dataset under the applicable terms and follow the pinned repository's documented run:
+Do not interpret the research metrics or the legacy binary as proof that a v2 artifact is present. After confirming the intended local use is permitted and placing the authorized raw data at `data/raw/SAML-D.csv`, build and train with the committed RiskLens contract:
 
 ```bash
 git clone https://github.com/Samarthuday/Quantitative-Transaction-Risk-Modeling.git research-source
 cd research-source
 git checkout bbe79212099c9d81c74c643362d52c228db7db08
-# Place an authorized SAML-D.csv at data/raw/SAML-D.csv.
-python -m pip install -e .
-python scripts/run_experiments.py
-# Source pipeline writes artifacts/risk_model.joblib.
-shasum -a 256 artifacts/risk_model.joblib
+python -m pip install -r requirements.lock
+python scripts/build_training_features.py
+python scripts/train_v2.py
+shasum -a 256 build/risk_model.joblib
+python scripts/verify_artifact.py --artifact build/risk_model.joblib --sha256 YOUR_SHA256
 ```
 
-That source command creates a legacy artifact and is useful for reproducing the historical research result only. It is **not** loadable by RiskLens v2. To enable RiskLens inference, retrain using an authorized dataset and the v2 online feature builder as the single training and inference transformation, then package an artifact with `feature_schema_version="risklens-causal-v2"`, the exact ordered `features`, and a manifest conforming to [the JSON schema](model-artifact-manifest.schema.json). Record the artifact SHA-256 and configure the required `RISKLENS_MODEL_SHA256`. The loader rejects artifacts without the v2 contract, complete manifest, or matching checksum. Joblib/pickle artifacts must only come from trusted, pinned training runs.
+The batch builder uses point-in-time range windows, excludes equal timestamps, and uses the same corrected sender/currency counterparty HHI as the online feature builder. Tests compare every declared feature on a fixture. Training uses chronological train/calibration/validation/test partitions, fits preprocessing only on train, calibration only on calibration, chooses alert capacity threshold on validation, evaluates the final test once, and compares a calibrated logistic baseline. The report includes sample and positive counts, prevalence, subgroup metrics, fixed-threshold confusion counts, and calendar-week block-bootstrap intervals. The saved artifact includes a checksum-bound manifest with source/training commits, raw dataset hash, config hash, split, metrics, and package versions.
+
+Training writes only to ignored local build/data directories. Do not redistribute the model until the SAML-D license question is resolved. Joblib/pickle artifacts must only come from trusted, pinned training runs.
 
 Do not train a replacement on generated toy labels to make the score panel appear enabled. In the absence of the compatible binary, RiskLens returns no probability and keeps the investigation workflow operational in evidence-only mode.
 

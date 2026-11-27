@@ -143,6 +143,17 @@ def test_api_policy_simulator_does_not_claim_supervised_metrics(tmp_path):
     assert "recall" not in response.json()
 
 
+def test_policy_simulator_accepts_bounded_review_effectiveness(tmp_path):
+    client = TestClient(create_app(tmp_path / "missing.joblib", tmp_path / "db.sqlite3"))
+    response = client.post("/api/v1/policies/simulate", json={
+        "probabilities": [.1, .8], "review_effectiveness": .45,
+    })
+    assert response.status_code == 200
+    assert response.json()["cost_assumptions"]["review_effectiveness_assumption"] == .45
+    invalid = client.post("/api/v1/policies/simulate", json={"probabilities": [.1], "review_effectiveness": 1.1})
+    assert invalid.status_code == 422
+
+
 def test_model_unavailable_returns_explicit_503(tmp_path):
     client = TestClient(create_app(tmp_path / "missing.joblib", tmp_path / "db.sqlite3"))
     assert client.get("/api/v1/health").json()["model_loaded"] is False

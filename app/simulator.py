@@ -1,6 +1,7 @@
 """Seeded synthetic payment stream. No ground-truth fraud label is generated or exposed."""
 
 import random
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -59,3 +60,24 @@ class Simulator:
             ))
             self.index += 1
         return records
+
+
+class SimulatorPool:
+    """Give each signed browser session its own in-memory demonstration stream."""
+
+    def __init__(self, seed: int = 41, max_sessions: int = 500):
+        self.seed = seed
+        self.max_sessions = max_sessions
+        self._instances: OrderedDict[str, Simulator] = OrderedDict()
+        self._default = Simulator(seed)
+
+    def for_session(self, session_id: str | None) -> Simulator:
+        if session_id is None:
+            return self._default
+        if session_id not in self._instances:
+            if len(self._instances) >= self.max_sessions:
+                self._instances.popitem(last=False)
+            self._instances[session_id] = Simulator(self.seed)
+        else:
+            self._instances.move_to_end(session_id)
+        return self._instances[session_id]

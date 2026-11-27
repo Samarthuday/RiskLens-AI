@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -95,3 +98,73 @@ def test_dashboard_assets_are_served_and_missing_review_does_not_create_audit(tm
     before = app.state.store.monitoring_summary()["audit_event_count"]
     assert client.post("/api/v1/cases/missing/review", json={"decision": "dismissed"}).status_code == 404
     assert app.state.store.monitoring_summary()["audit_event_count"] == before
+
+
+def test_browser_sessions_isolate_storage_resets_and_simulator_state(tmp_path):
+    app = create_app(tmp_path / "missing.joblib", tmp_path / "shared.sqlite3", session_isolation=True)
+    first = TestClient(app)
+    second = TestClient(app)
+    initial = first.post("/api/v1/simulation/reset?count=4")
+    assert initial.status_code == 200
+    assert first.get("/api/v1/monitoring/metrics").json()["transaction_count"] == 4
+    assert second.get("/api/v1/monitoring/metrics").json()["transaction_count"] == 0
+    first.post("/api/v1/simulation/start")
+    assert first.get("/api/v1/simulation/status").json()["running"] is True
+    assert second.get("/api/v1/simulation/status").json()["running"] is False
+    cookie = initial.headers.get("set-cookie", "").lower()
+    assert "httponly" in cookie and "samesite=lax" in cookie
+    assert first.post("/api/v1/simulation/reset?count=2").status_code == 200
+    assert first.get("/api/v1/monitoring/metrics").json()["transaction_count"] == 2
+    assert second.get("/api/v1/monitoring/metrics").json()["transaction_count"] == 0
+
+
+def test_razorpay_test_webhook_signature_dedup_and_out_of_order_events(tmp_path, monkeypatch):
+    import app.main as main_module
+    from app.config import Settings
+
+    settings = Settings()
+    settings.razorpay_mode = "test"
+    settings.razorpay_test_webhook_secret = "test-only-hook-secret"
+    settings.razorpay_test_read_token = "owner-read-token"
+    monkeypatch.setattr(main_module, "get_settings", lambda: settings)
+    app = main_module.create_app(tmp_path / "missing.joblib", tmp_path / "payments.sqlite3")
+    client = TestClient(app)
+
+    def send(event_id, event_type, status, created_at):
+        body = json.dumps({
+            "event": event_type, "created_at": created_at,
+            "payload": {"payment": {"entity": {
+                "entity": "payment", "id": "pay_demo123", "order_id": "order_demo123",
+                "amount": 12999, "currency": "INR", "method": "card", "status": status,
+                "email": "must-not-be-stored@example.test", "contact": "+910000000000",
+            }}},
+        }, separators=(",", ":")).encode()
+        signature = hmac.new(settings.razorpay_test_webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+        return client.post("/api/v1/webhooks/razorpay", content=body, headers={
+            "content-type": "application/json", "x-razorpay-signature": signature,
+            "x-razorpay-event-id": event_id,
+        })
+
+    bad = client.post("/api/v1/webhooks/razorpay", content=b"{}", headers={
+        "x-razorpay-signature": "0" * 64, "x-razorpay-event-id": "evt_bad",
+    })
+    assert bad.status_code == 401
+    captured = send("evt_capture", "payment.captured", "captured", 200)
+    assert captured.status_code == 202 and captured.json()["accepted"] is True
+    duplicate = send("evt_capture", "payment.captured", "captured", 200)
+    assert duplicate.status_code == 202 and duplicate.json()["duplicate"] is True
+    stale_authorization = send("evt_authorize", "payment.authorized", "authorized", 100)
+    assert stale_authorization.status_code == 202
+    assert client.get("/api/v1/payments").status_code == 403
+    listing = client.get("/api/v1/payments", headers={"authorization": "Bearer owner-read-token"}).json()
+    assert listing["total"] == 1
+    payment = listing["items"][0]
+    assert payment["payment_status"] == "captured"
+    assert payment["amount_subunits"] == 12999
+    assert payment["currency"] == "INR"
+    assert payment["event_count"] == 2
+    assert "email" not in payment and "contact" not in payment
+    timeline = client.get("/api/v1/payments/pay_demo123/events", headers={
+        "authorization": "Bearer owner-read-token",
+    }).json()
+    assert timeline["count"] == 2

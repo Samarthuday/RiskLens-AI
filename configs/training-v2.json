@@ -1,0 +1,28 @@
+{
+  "feature_schema_version": "risklens-causal-v2",
+  "target": "Is_laundering == 1",
+  "train_fraction": 0.65,
+  "calibration_fraction": 0.10,
+  "validation_fraction": 0.10,
+  "alert_rate": 0.005,
+  "random_state": 42,
+  "calibration_method": "logistic regression on raw probability logits",
+  "xgboost": {
+    "n_estimators": 500,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 5,
+    "reg_alpha": 0.1,
+    "reg_lambda": 2.0,
+    "tree_method": "hist",
+    "eval_metric": "aucpr"
+  },
+  "preprocessing": {
+    "numeric_imputer": "median",
+    "categorical_imputer": "most_frequent",
+    "one_hot_handle_unknown": "ignore",
+    "one_hot_min_frequency": 20
+  }
+}
