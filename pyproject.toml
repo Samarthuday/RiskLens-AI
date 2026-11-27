@@ -20,6 +20,7 @@ dependencies = [
   "pyarrow>=19,<25",
   "shap>=0.46,<1",
   "python-dotenv>=1,<2",
+  "itsdangerous>=2.2,<3",
 ]
 
 [project.optional-dependencies]
