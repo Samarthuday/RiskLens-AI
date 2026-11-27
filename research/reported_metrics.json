@@ -1,0 +1,18 @@
+{
+  "source_repository": "https://github.com/Samarthuday/Quantitative-Transaction-Risk-Modeling",
+  "source_commit": "bbe79212099c9d81c74c643362d52c228db7db08",
+  "source_file": "reports/model_metrics.json",
+  "data": "Synthetic SAML-D; approximately 9.5 million transactions",
+  "model_version": "2.1.0",
+  "test_metrics": {
+    "pr_auc": 0.9859286355765932,
+    "roc_auc": 0.9998338278230887,
+    "alert_0.100%_precision": 1.0,
+    "alert_0.100%_recall": 0.8388429752066116,
+    "alert_0.500%_recall": 0.9929161747343566,
+    "alert_1.000%_recall": 0.9946871310507674,
+    "brier_score": 0.0000991499618976377,
+    "log_loss": 0.00044060166692361236
+  },
+  "provenance_note": "Copied from the source repository's committed report. These are offline held-out research results on synthetic data, not RiskLens runtime metrics."
+}

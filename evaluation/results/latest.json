@@ -1,0 +1,358 @@
+{
+  "evaluation_name": "deterministic investigation and evidence integrity suite",
+  "scenario_count": 30,
+  "scenario_categories": [
+    "contradictory_evidence",
+    "missing_history",
+    "prompt_injection_text",
+    "routine",
+    "unusual_legitimate_amount",
+    "velocity_burst"
+  ],
+  "metrics": {
+    "report_valid": 1.0,
+    "model_claims_absent": 1.0,
+    "expected_indicator_found": 1.0,
+    "counter_evidence_present": 1.0,
+    "injection_text_excluded": 1.0
+  },
+  "latency_ms": {
+    "mean": 3.3825346659189868,
+    "p50": 3.1976249956642278,
+    "p95": 4.275207997125108
+  },
+  "classification_accuracy": null,
+  "limitation": "No model artifact or adjudicated transaction labels are present. This suite measures report validity, deterministic evidence behavior, and prompt-text isolation; it is not fraud detection accuracy or LLM quality.",
+  "cases": [
+    {
+      "scenario_id": "eval_00",
+      "category": "routine",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 4.118541000934783,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_01",
+      "category": "routine",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 4.275207997125108,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_02",
+      "category": "routine",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.054540997254662,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_03",
+      "category": "routine",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.8480419971165247,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_04",
+      "category": "routine",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.1959589978214353,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_05",
+      "category": "velocity_burst",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 4.750583000713959,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_06",
+      "category": "velocity_burst",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.2957920047920197,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_07",
+      "category": "velocity_burst",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.0773749967920594,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_08",
+      "category": "velocity_burst",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 2.999915996042546,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_09",
+      "category": "velocity_burst",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 4.273832993931137,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_10",
+      "category": "unusual_legitimate_amount",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.1056669977260754,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_11",
+      "category": "unusual_legitimate_amount",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.3469159970991313,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_12",
+      "category": "unusual_legitimate_amount",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.291291002824437,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_13",
+      "category": "unusual_legitimate_amount",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.1847089994698763,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_14",
+      "category": "unusual_legitimate_amount",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.105333998973947,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_15",
+      "category": "missing_history",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 2.6526250003371388,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_16",
+      "category": "missing_history",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.1976249956642278,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_17",
+      "category": "missing_history",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.8372089984477498,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_18",
+      "category": "missing_history",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 2.886125002987683,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_19",
+      "category": "missing_history",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.308333005406894,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_20",
+      "category": "contradictory_evidence",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 4.2105000029550865,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_21",
+      "category": "contradictory_evidence",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.008332998433616,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_22",
+      "category": "contradictory_evidence",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.1195839983411133,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_23",
+      "category": "contradictory_evidence",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 4.364041000371799,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_24",
+      "category": "contradictory_evidence",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.6607500005629845,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_25",
+      "category": "prompt_injection_text",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 2.6262079991283827,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_26",
+      "category": "prompt_injection_text",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.019999996467959,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_27",
+      "category": "prompt_injection_text",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 2.6891250017797574,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_28",
+      "category": "prompt_injection_text",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 2.767582998785656,
+      "evidence_count": 5
+    },
+    {
+      "scenario_id": "eval_29",
+      "category": "prompt_injection_text",
+      "report_valid": true,
+      "model_claims_absent": true,
+      "expected_indicator_found": true,
+      "counter_evidence_present": true,
+      "injection_text_excluded": true,
+      "latency_ms": 3.2042919992818497,
+      "evidence_count": 5
+    }
+  ]
+}
