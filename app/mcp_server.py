@@ -68,7 +68,7 @@ def get_model_prediction(transaction_id: str) -> dict:
 @mcp.tool()
 def evaluate_risk_policy(transaction_id: str, threshold: float = 0.5,
                          false_positive_cost: float = 1.0,
-                         missed_fraud_cost: float = 100.0,
+                         missed_event_cost: float = 100.0,
                          manual_review_cost: float = 0.25) -> dict:
     """Score a stored transaction locally, then return a simulated human-review recommendation."""
     if artifact is None:
@@ -83,7 +83,7 @@ def evaluate_risk_policy(transaction_id: str, threshold: float = 0.5,
     vector = build_feature_vector(row, store.feature_history(row))
     probability, _latency = predict(artifact, vector)
     action, costs = recommend(probability, threshold,
-                              PolicyCosts(false_positive_cost, missed_fraud_cost, manual_review_cost))
+                              PolicyCosts(false_positive_cost, missed_event_cost, manual_review_cost))
     return {"recommended_simulated_action": action, "human_review_required": True,
             "policy_costs": costs, "assumptions": "80% manual review effectiveness; hypothetical costs"}
 

@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import ROOT, get_settings
 from app.database import Store
-from app.features import build_feature_vector
+from app.features import FEATURE_SCHEMA_VERSION, build_feature_vector
 from app.investigation import investigate
 from app.model import compatibility_warnings, explain, load_artifact, predict
 from app.policy import PolicyCosts, simulate_policy
@@ -41,9 +41,6 @@ class RequestGuard(BaseHTTPMiddleware):
         self.requests: dict[str, deque] = defaultdict(deque)
 
     async def dispatch(self, request: Request, call_next):
-        length = request.headers.get("content-length")
-        if length and length.isdigit() and int(length) > 1_000_000:
-            return JSONResponse({"detail": "Request body exceeds the 1 MB limit."}, status_code=413)
         if self.limit > 0 and request.url.path.startswith("/api/") and request.url.path not in {"/api/health", "/api/v1/health", "/api/v1/ready"}:
             address = request.client.host if request.client else "unknown"
             now = time.monotonic()
@@ -54,6 +51,56 @@ class RequestGuard(BaseHTTPMiddleware):
                 return JSONResponse({"detail": "Rate limit exceeded; retry in one minute."}, status_code=429, headers={"Retry-After": "60"})
             history.append(now)
         return await call_next(request)
+
+
+class RequestBodyLimitMiddleware:
+    """Bound streamed/chunked API bodies, including requests without Content-Length."""
+
+    def __init__(self, app, max_bytes: int = 1_000_000):
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope.get("path", "").startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        length = headers.get(b"content-length")
+        if length and length.isdigit() and int(length) > self.max_bytes:
+            body = b'{"detail":"Request body exceeds the 1 MB limit."}'
+            await send({"type": "http.response.start", "status": 413, "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        chunks = bytearray()
+        disconnected = False
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                disconnected = True
+                break
+            chunks.extend(message.get("body", b""))
+            if len(chunks) > self.max_bytes:
+                body = b'{"detail":"Request body exceeds the 1 MB limit."}'
+                await send({"type": "http.response.start", "status": 413, "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+                await send({"type": "http.response.body", "body": body})
+                return
+            if not message.get("more_body", False):
+                break
+
+        if disconnected:
+            await self.app(scope, receive, send)
+            return
+        sent = False
+
+        async def replay_body():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": bytes(chunks), "more_body": False}
+            return {"type": "http.disconnect"}
+
+        await self.app(scope, replay_body, send)
 
 
 def _public_transaction(row: dict) -> dict:
@@ -69,8 +116,8 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
     store = Store(database_path)
     simulator = Simulator(settings.demo_seed)
     app = FastAPI(
-        title="RiskLens AI — Payment Risk Intelligence",
-        description="Synthetic transaction monitoring, evidence-based investigations, and optional validated model inference.",
+        title="RiskLens AI — Transaction Surveillance",
+        description="Synthetic suspicious-activity monitoring, evidence-based investigations, and optional version-compatible model inference.",
         version="0.1.0",
         openapi_url="/api/openapi.json",
         docs_url="/api/docs",
@@ -82,6 +129,7 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
     app.state.model_error = model_error
     app.state.model_sha256 = checksum
     app.add_middleware(RequestGuard, limit_per_minute=settings.rate_limit_per_minute)
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1_000_000)
 
     @app.get("/health")
     @app.get("/api/v1/health")
@@ -112,6 +160,8 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
     @app.post("/api/v1/transactions", status_code=201)
     async def create_transaction(payload: TransactionCreate):
         record = payload.model_dump(mode="json")
+        # Provenance is assigned by trusted internal simulator code, never by API callers.
+        record["source"] = "manual"
         record["timestamp"] = datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00")).isoformat()
         existing = store.get_transaction(record["transaction_id"])
         if existing:
@@ -120,10 +170,10 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
                 return {"transaction": _public_transaction(existing), "idempotent_replay": True}
             raise HTTPException(409, "transaction_id already exists with different content")
         try:
-            saved = store.add_transaction(payload.model_dump(mode="python"))
+            saved = store.add_transaction(record)
         except Exception as error:
             raise HTTPException(409, f"Unable to persist transaction: {type(error).__name__}") from error
-        store.audit(None, payload.transaction_id, "transaction_ingested", {"source": payload.source})
+        store.audit(None, payload.transaction_id, "transaction_ingested", {"source": "manual"})
         return {"transaction": _public_transaction(saved), "idempotent_replay": False}
 
     @app.get("/api/v1/transactions")
@@ -154,7 +204,7 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
         return {"transaction_id": row["transaction_id"], "calibrated_probability": probability,
                 "risk_band": band, "requires_review": probability >= threshold,
                 "decision_threshold": threshold, "model_version": artifact["model_version"],
-                "inference_latency_ms": latency_ms, "feature_schema_version": "research-bbe7921-v1",
+                "inference_latency_ms": latency_ms, "feature_schema_version": FEATURE_SCHEMA_VERSION,
                 "feature_warnings": ["No entity IDs or labels were used as model inputs."]}
 
     @app.post("/api/v1/investigations")
@@ -188,8 +238,8 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
         return report
 
     @app.get("/api/v1/investigations")
-    async def list_investigations(limit: int = Query(100, ge=1, le=500)):
-        items = store.list_investigations(limit)
+    async def list_investigations(limit: int = Query(100, ge=1, le=500), transaction_id: str | None = None):
+        items = store.list_investigations(limit, transaction_id=transaction_id)
         return {"items": items, "count": len(items)}
 
     @app.get("/api/v1/investigations/{investigation_id}/trace")
@@ -205,8 +255,9 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
             raise HTTPException(404, "case not found")
         report["status"] = "reviewed"
         report["review_decision"] = payload.decision
+        report["analyst_note"] = payload.analyst_note.strip()
         store.update_investigation(report)
-        store.audit(case_id, report["transaction_id"], "human_review_recorded", {"decision": payload.decision, "analyst_note_recorded": bool(payload.analyst_note), "analyst_note_length": len(payload.analyst_note)})
+        store.audit(case_id, report["transaction_id"], "human_review_recorded", {"decision": payload.decision, "analyst_note": report["analyst_note"]})
         return report
 
     @app.get("/api/v1/monitoring/metrics")
@@ -249,7 +300,7 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
 
     @app.post("/api/v1/policies/simulate")
     async def policies_simulate(payload: PolicySimulationRequest):
-        costs = PolicyCosts(payload.false_positive_cost, payload.missed_fraud_cost, payload.manual_review_cost)
+        costs = PolicyCosts(payload.false_positive_cost, payload.missed_event_cost, payload.manual_review_cost)
         return simulate_policy(payload.probabilities, payload.alert_budget, costs)
 
     @app.get("/api/v1/simulation/status")

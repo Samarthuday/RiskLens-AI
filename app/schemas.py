@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class TransactionCreate(BaseModel):
@@ -45,7 +45,7 @@ class InvestigationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     transaction_id: str = Field(min_length=4, max_length=64)
     false_positive_cost: float = Field(default=1.0, ge=0)
-    missed_fraud_cost: float = Field(default=100.0, ge=0)
+    missed_event_cost: float = Field(default=100.0, ge=0, validation_alias=AliasChoices("missed_event_cost", "missed_fraud_cost"))
     manual_review_cost: float = Field(default=0.25, ge=0)
     review_threshold: float | None = Field(default=None, gt=0, lt=1)
 
@@ -56,6 +56,9 @@ class EvidenceItem(BaseModel):
     statement: str
     numeric_value: float | int | None = None
     source_transaction_ids: list[str] = Field(default_factory=list)
+    tool_call_id: str | None = None
+    source_call_id: str | None = None
+    claim_key: str | None = None
 
 
 class Contribution(BaseModel):
@@ -92,6 +95,7 @@ class InvestigationReport(BaseModel):
     status: Literal["open", "reviewed"] = "open"
     human_review_required: bool = True
     review_decision: Literal["accepted", "dismissed", "escalated"] | None = None
+    analyst_note: str = ""
     tool_calls: int = 0
     latency_ms: float = 0
     report_mode: Literal["deterministic_template", "llm_assisted"] = "deterministic_template"
@@ -112,7 +116,7 @@ class PolicySimulationRequest(BaseModel):
     probabilities: list[float] = Field(min_length=1, max_length=10000)
     alert_budget: float = Field(default=0.005, gt=0, le=1)
     false_positive_cost: float = Field(default=1.0, ge=0)
-    missed_fraud_cost: float = Field(default=100.0, ge=0)
+    missed_event_cost: float = Field(default=100.0, ge=0, validation_alias=AliasChoices("missed_event_cost", "missed_fraud_cost"))
     manual_review_cost: float = Field(default=0.25, ge=0)
 
     @field_validator("probabilities")

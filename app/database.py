@@ -67,7 +67,9 @@ class Store:
 
     def list_transactions(self, limit: int = 100) -> list[dict[str, Any]]:
         with self.connect() as db:
-            rows = db.execute("SELECT * FROM transactions ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
+            rows = db.execute("""SELECT t.*,
+                (SELECT p.probability FROM predictions p WHERE p.transaction_id=t.transaction_id ORDER BY p.prediction_id DESC LIMIT 1) AS latest_probability
+                FROM transactions t ORDER BY t.timestamp DESC LIMIT ?""", (limit,)).fetchall()
         return [dict(row) for row in rows]
 
     def history(self, *, before: str, sender_id: str | None = None, receiver_id: str | None = None) -> list[dict[str, Any]]:
@@ -102,14 +104,17 @@ class Store:
             row = db.execute("SELECT report_json FROM investigations WHERE investigation_id=?", (investigation_id,)).fetchone()
         return json.loads(row["report_json"]) if row else None
 
-    def list_investigations(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_investigations(self, limit: int = 100, transaction_id: str | None = None) -> list[dict[str, Any]]:
         with self.connect() as db:
-            rows = db.execute("SELECT report_json FROM investigations ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            if transaction_id:
+                rows = db.execute("SELECT report_json FROM investigations WHERE transaction_id=? ORDER BY created_at DESC LIMIT ?", (transaction_id, limit)).fetchall()
+            else:
+                rows = db.execute("SELECT report_json FROM investigations ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
         return [json.loads(row["report_json"]) for row in rows]
 
     def investigation_trace(self, investigation_id: str) -> list[dict[str, Any]]:
         with self.connect() as db:
-            rows = db.execute("SELECT event_type,details_json,created_at FROM audit_events WHERE investigation_id=? AND event_type IN ('workflow_stage','workflow_complete','llm_fallback','investigation_created','tool_invocation') ORDER BY event_id", (investigation_id,)).fetchall()
+            rows = db.execute("SELECT event_type,details_json,created_at FROM audit_events WHERE investigation_id=? AND event_type IN ('workflow_stage','workflow_complete','llm_fallback','investigation_created','tool_invocation','human_review_recorded') ORDER BY event_id", (investigation_id,)).fetchall()
         return [{"event_type": row["event_type"], "details": json.loads(row["details_json"]), "created_at": row["created_at"]} for row in rows]
 
     def update_investigation(self, report: dict[str, Any]) -> None:
@@ -127,10 +132,14 @@ class Store:
     def monitoring_summary(self) -> dict[str, Any]:
         with self.connect() as db:
             row = db.execute("SELECT COUNT(*) AS count, AVG(inference_ms) AS mean_ms, MAX(inference_ms) AS max_ms FROM predictions").fetchone()
+            unique_scored = db.execute("SELECT COUNT(DISTINCT transaction_id) FROM predictions").fetchone()[0]
             total = db.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
             cases = db.execute("SELECT COUNT(*) FROM investigations").fetchone()[0]
+            reviewed_cases = db.execute("SELECT COUNT(*) FROM investigations WHERE json_extract(report_json,'$.status')='reviewed'").fetchone()[0]
+            investigation_latencies = [row[0] for row in db.execute("SELECT CAST(json_extract(report_json,'$.latency_ms') AS REAL) FROM investigations ORDER BY CAST(json_extract(report_json,'$.latency_ms') AS REAL)") if row[0] is not None]
             events = db.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
-        return {"predictions_recorded": row["count"], "transaction_count": total, "investigation_count": cases, "audit_event_count": events, "mean_inference_ms": row["mean_ms"], "max_inference_ms": row["max_ms"], "label_monitoring": "unavailable: no adjudicated outcome labels recorded"}
+        p95_index = min(len(investigation_latencies) - 1, int(len(investigation_latencies) * 0.95)) if investigation_latencies else None
+        return {"predictions_recorded": row["count"], "unique_scored_transactions": unique_scored, "transaction_count": total, "investigation_count": cases, "reviewed_case_count": reviewed_cases, "open_case_count": cases - reviewed_cases, "investigation_latency_p95_ms": investigation_latencies[p95_index] if p95_index is not None else None, "audit_event_count": events, "mean_inference_ms": row["mean_ms"], "max_inference_ms": row["max_ms"], "label_monitoring": "unavailable: no adjudicated outcome labels recorded"}
 
     def reset_simulated_transactions(self) -> int:
         with self.connect() as db:

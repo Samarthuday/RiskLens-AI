@@ -36,7 +36,7 @@ class PolicyInput(BaseModel):
     probability: float | None = Field(ge=0, le=1)
     threshold: float = Field(gt=0, lt=1)
     false_positive_cost: float = Field(ge=0)
-    missed_fraud_cost: float = Field(ge=0)
+    missed_event_cost: float = Field(ge=0)
     manual_review_cost: float = Field(ge=0)
 
 
@@ -72,10 +72,23 @@ class ToolRegistry:
         try:
             result = spec.handler(params.model_dump())
         except Exception as error:
-            self.trace.append({"tool": name, "duration_ms": (time.perf_counter() - started) * 1000, "success": False, "error_type": type(error).__name__})
+            self.trace.append({"call_id": f"TC-{len(self.trace) + 1:02d}", "tool": name, "duration_ms": (time.perf_counter() - started) * 1000, "success": False, "error_type": type(error).__name__})
             raise
-        self.trace.append({"tool": name, "duration_ms": (time.perf_counter() - started) * 1000, "success": True})
+        self.trace.append({"call_id": f"TC-{len(self.trace) + 1:02d}", "tool": name, "duration_ms": (time.perf_counter() - started) * 1000, "success": True, "result_summary": _result_summary(result)})
         return result
+
+
+def _result_summary(result: Any) -> dict[str, Any]:
+    """Keep useful tool outputs in traces without copying transaction records or free text."""
+    if isinstance(result, list):
+        return {"record_count": len(result)}
+    if isinstance(result, dict):
+        safe_strings = {"transaction_id", "model_version", "policy", "threshold_basis", "cost_unit"}
+        summary = {key: value for key, value in result.items() if isinstance(value, (int, float, bool)) or value is None or (key in safe_strings and isinstance(value, str))}
+        if isinstance(result.get("transaction_id"), str):
+            summary["transaction_ids"] = [result["transaction_id"]]
+        return summary
+    return {"result_type": type(result).__name__}
 
 
 def build_tool_registry(store, artifact, review_threshold: float) -> ToolRegistry:
@@ -113,7 +126,7 @@ def build_tool_registry(store, artifact, review_threshold: float) -> ToolRegistr
         return explain_model(artifact, args["feature_vector"])
 
     def policy(args):
-        return recommend(args["probability"], args["threshold"], PolicyCosts(args["false_positive_cost"], args["missed_fraud_cost"], args["manual_review_cost"]))
+        return recommend(args["probability"], args["threshold"], PolicyCosts(args["false_positive_cost"], args["missed_event_cost"], args["manual_review_cost"]))
 
     for spec in (
         ToolSpec("get_transaction", "Retrieve allow-listed transaction fields.", TransactionLookup, get_transaction),

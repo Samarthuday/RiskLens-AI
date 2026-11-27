@@ -8,7 +8,7 @@ The repository includes a Docker image suitable for local use and a Docker Space
 docker compose up --build
 ```
 
-The container listens on `0.0.0.0:7860`, runs as a non-root user, and persists SQLite data under the mounted `./data` directory. It starts in evidence-only mode unless a trusted model artifact is mounted.
+The container listens on `0.0.0.0:7860`, runs as a non-root user, and persists SQLite data under the mounted `./data` directory. It starts in evidence-only mode unless a trusted `risklens-causal-v2` model artifact is mounted. This demonstration has no user authentication or per-visitor database isolation; do not expose shared reset/write controls to untrusted concurrent visitors until a session isolation layer is added.
 
 ## Hugging Face Spaces
 

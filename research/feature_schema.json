@@ -1,6 +1,8 @@
 {
   "source_commit": "bbe79212099c9d81c74c643362d52c228db7db08",
-  "schema_version": "research-bbe7921-v1",
+  "schema_version": "risklens-causal-v2",
+  "source_schema_version": "research-bbe7921-v1",
+  "compatibility": "Feature names/order are inherited from research, but the corrected causal sender_counterparty_hhi definition is not compatible with artifacts trained on the source SQL output. Artifacts must be retrained and declare risklens-causal-v2.",
   "feature_names": [
     "Amount",
     "log_amount",

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,7 +18,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e '.[dev]'
+      - run: python -m pip install -r requirements.lock
+      - run: python -m pip install --no-deps --no-build-isolation -e .
       - run: ruff check app scripts tests src
       - run: pytest -q
       - run: python -c "from app.main import create_app; app=create_app(); print(app.title)"

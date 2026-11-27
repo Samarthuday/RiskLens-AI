@@ -1,4 +1,9 @@
-"""Online, point-in-time feature transformation compatible with research commit bbe7921."""
+"""Versioned causal features for the RiskLens online scoring contract.
+
+The source research HHI SQL is not equivalent to a point-in-time online HHI.
+RiskLens therefore versions its corrected causal definition and rejects artifacts
+that do not declare this exact feature contract.
+"""
 
 import math
 from collections import defaultdict
@@ -6,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
+
+FEATURE_SCHEMA_VERSION = "risklens-causal-v2"
 
 MODEL_FEATURES = [
     "Amount", "log_amount", "hour_sin", "hour_cos", "dow_sin", "dow_cos", "month_sin", "month_cos",

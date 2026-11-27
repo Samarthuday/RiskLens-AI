@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools>=69,<76"]
+requires = ["setuptools==75.8.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "risklens-ai"
 version = "0.1.0"
-description = "Evidence-driven payment risk investigation demo built on a pinned quantitative research foundation."
-requires-python = ">=3.11,<3.14"
+description = "Evidence-driven transaction surveillance demo built on a pinned quantitative research foundation."
+requires-python = ">=3.12,<3.14"
 dependencies = [
   "fastapi>=0.115,<1",
   "uvicorn[standard]>=0.30,<1",
@@ -33,7 +33,7 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

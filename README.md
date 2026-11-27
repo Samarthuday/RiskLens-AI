@@ -6,7 +6,7 @@ app_port: 7860
 
 # RiskLens AI
 
-RiskLens AI is a standalone payment risk investigation application built on a pinned rare-event financial ML research project. It combines a seeded synthetic transaction stream, point-in-time feature construction, optional inference from the validated XGBoost artifact, local SHAP explanations, deterministic cost-sensitive policy recommendations, a human review workflow, and SQLite audit records.
+RiskLens AI is a standalone AI-assisted transaction surveillance workspace built on a pinned rare-event financial ML research project. The source model target is synthetic AML suspicious activity; it is not a payment-fraud, chargeback, or realized-loss model. The app combines a seeded transaction stream, causal point-in-time features, version-gated model loading, evidence-linked investigations, a persistent analyst workflow, and SQLite audit records.
 
 The application runs without credentials or a model artifact. In that mode it still demonstrates transaction ingestion, historical features, evidence retrieval, investigation report validation, and analyst review, while explicitly returning **no model probability**. It never substitutes random predictions or hand-authored alert scores.
 
@@ -16,9 +16,9 @@ The application runs without credentials or a model artifact. In that mode it st
 
 1. Start the app with `uvicorn app.main:app --host 0.0.0.0 --port 7860` and open <http://localhost:7860>.
 2. Reset the **Burst pattern** demo. The simulator creates 36 reproducible synthetic records with no exposed target labels.
-3. Select a transaction from the queue. RiskLens retrieves earlier sender activity, computes the research-compatible feature vector, validates a structured report, and saves its evidence and workflow trace.
-4. With `artifacts/risk_model.joblib` installed, the investigation also runs the calibrated model and attempts local SHAP attribution. Without it, model probability and explanation stay unavailable.
-5. Record an analyst decision; inspect the audit event count and actual workflow latency.
+3. Open a transaction. RiskLens reopens its saved case when one exists; otherwise it retrieves earlier activity and creates an evidence-linked report.
+4. This checkout has no `risklens-causal-v2` model artifact, so it displays evidence and uncertainty without a model probability or SHAP attribution. Source model artifacts with the old HHI definition are rejected.
+5. Record an analyst decision and note; reopen the case to see the saved decision and measured workflow trace.
 6. Change expected-cost inputs and run the policy simulator. Its estimates are hypothetical and do not claim measured savings.
 7. Use **Research provenance** to distinguish the historical SAML-D results from app measurements.
 
@@ -28,13 +28,14 @@ The application runs without credentials or a model artifact. In that mode it st
 - Seeded simulation with routine and burst modes; start, pause, step, and reset controls.
 - Parameterized SQLite persistence for transactions, cases, prediction latency, and append-only audit events.
 - Strict Pydantic transaction and investigation schemas, idempotent transaction ingestion, and a 1 MB body and per-process request limit.
-- Point-in-time transaction, behavioral, and network feature transformation aligned to the pinned research feature schema.
-- Optional calibrated XGBoost inference, threshold-based review flag, and local SHAP contributions, only when a compatible artifact is supplied.
-- Deterministic evidence-based report generation, evidence reference checks, conditional model routing, and explicit uncertainty/counter-evidence fields.
-- Human review and persisted analyst actions; a bounded, read-only optional MCP tool server.
+- Versioned causal point-in-time feature transformation with an explicit compatibility break for the source HHI bug; model artifacts require the `risklens-causal-v2` contract.
+- Optional calibrated XGBoost inference and local SHAP contributions, only when a v2 artifact is supplied.
+- Deterministic evidence reports bound to successful tool calls, stored tool results, cited transaction IDs, account scope, and time windows.
+- Persistent analyst decisions and notes, reopenable cases, and a saved workflow/tool trace.
+- Bounded API body handling including chunked requests; API clients cannot self-assert trusted simulator provenance.
 - Hypothetical expected-cost policy simulation and output-distribution drift comparison when actual model observations exist.
 - Optional OpenAI-compatible summary synthesis gated to synthetic demo records; no free-text description or personal transaction text is sent to the provider. No API key is required for offline use.
-- A 30-scenario evidence-integrity evaluation suite, automated tests, CI workflow, Docker configuration, and deployment instructions.
+- An 18-case investigation-integrity evaluation, automated tests, CI workflow, Docker configuration, and deployment instructions.
 
 ## Research metrics and app measurements
 
@@ -53,10 +54,10 @@ Metric provenance, other reported scores, the artifact gap, and the feature comp
 ```bash
 git clone https://github.com/Samarthuday/RiskLens-AI.git
 cd RiskLens-AI
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.lock
-python -m pip install --no-deps -e .
+python -m pip install --no-deps --no-build-isolation -e .
 cp .env.example .env
 uvicorn app.main:app --host 0.0.0.0 --port 7860
 ```
@@ -65,7 +66,7 @@ The database defaults to `data/risklens.sqlite3`. It is local and ignored by Git
 
 ### Optional validated model artifact
 
-This checkout intentionally contains no model binary or licensed SAML-D data. See [docs/research-foundation.md](docs/research-foundation.md) for the exact recovery/training procedure from the pinned research source. Once you have a trusted compatible artifact:
+This checkout intentionally contains no model binary or licensed SAML-D data. The historical research artifact is not compatible with RiskLens's corrected HHI semantics and will be rejected. See [docs/research-foundation.md](docs/research-foundation.md) for provenance and the requirements for a separately trained v2 artifact. Once you have a trusted compatible artifact:
 
 ```bash
 mkdir -p artifacts
@@ -73,7 +74,7 @@ cp /path/to/trusted/risk_model.joblib artifacts/risk_model.joblib
 shasum -a 256 artifacts/risk_model.joblib
 ```
 
-Set `RISKLENS_MODEL_PATH` and the matching `RISKLENS_MODEL_SHA256` in `.env`, then restart. The health and model metadata endpoints report whether it loaded and the actual checksum. Never load a joblib artifact from an untrusted source: Python pickle loading can execute code.
+Set `RISKLENS_MODEL_PATH` and the required matching `RISKLENS_MODEL_SHA256` in `.env`, then restart. The artifact must declare the exact `risklens-causal-v2` feature contract and the manifest shape in [docs/model-artifact-manifest.schema.json](docs/model-artifact-manifest.schema.json). The health and model metadata endpoints report whether it loaded and the actual checksum. Never load a joblib artifact from an untrusted source: Python pickle loading can execute code.
 
 ### Docker
 
@@ -103,34 +104,34 @@ The local service listens on port 7860. To enable model scoring, mount the trust
 | GET | `/api/v1/evaluation/results` | Pinned offline research metrics and provenance |
 
 See the interactive docs at `/api/docs` and examples in [docs/api.md](docs/api.md).
-The optional local MCP server and client configuration are documented in [docs/mcp.md](docs/mcp.md).
+The optional local MCP server and client configuration are documented in [docs/mcp.md](docs/mcp.md). The fixed investigation workflow is not an autonomous agent; the optional LLM only summarizes evidence.
 
 ## Architecture and quantitative methodology
 
-The request path and deterministic/LLM boundary are documented in [docs/architecture.md](docs/architecture.md). Research-compatible online features are in `app/features.py`; these exclude the current transaction and identifiers/target columns. The calibrator module under `src/models/` preserves the import path embedded in source artifacts.
+The request path and deterministic/LLM boundary are documented in [docs/architecture.md](docs/architecture.md). Versioned online features are in `app/features.py`; these exclude the current transaction and identifiers/target columns. The calibrator module under `src/models/` preserves an import path used by source artifacts, but matching that import path does not make a legacy artifact feature-compatible.
 
-Risk bands are demo policy cutoffs (low `<0.05`, medium `0.05–0.20`, high `0.20–0.50`, critical `>=0.50`). The model's alert threshold is learned on the source validation set and used by score endpoints when a compatible artifact loads. The decision simulator assumes manual review prevents 80% of modeled missed-event cost; this assumption is adjustable in code and is not a claim about an actual operations team. It reports expected costs, never precision/recall without labels or actual financial savings.
+Risk bands are demo policy cutoffs (low `<0.05`, medium `0.05–0.20`, high `0.20–0.50`, critical `>=0.50`). The decision simulator uses user-defined abstract cost units and assumes manual review prevents 80% of modeled missed-event cost. Its configured/model threshold can constrain the cost break-even threshold; the response reports which threshold determined the action. These assumptions do not describe an actual operations team, fraud loss, or measured savings. The source research target is AML suspicious activity and its reported metrics are only available in the provenance view.
 
 ## Evaluation and tests
 
 ```bash
 pytest -q
 ruff check app scripts tests src
-python scripts/run_agent_eval.py
+python scripts/run_investigation_eval.py
 ```
 
-The agent evaluation has 30 routine, burst, unusual-legitimate, missing-history, contradictory-evidence, and prompt-injection-text cases. It measures schema/evidence validity, use of expected deterministic indicators, and exclusion of untrusted transaction descriptions. It does not measure fraud classification accuracy: no compatible model artifact or adjudicated outcome labels are distributed with this repository.
+The investigation integrity evaluation has 18 varied routine, burst, unusual-legitimate, missing-history, contradictory-evidence, and prompt-injection-text cases. Each metric reports its applicable-case denominator; inapplicable checks are excluded rather than counted as passes. It measures deterministic report integrity and prompt-text isolation. It does not evaluate agent tool choice, model accuracy, comparative usefulness, or LLM quality; no compatible model artifact or adjudicated outcome labels are distributed with this repository.
 
 ## Security and limitations
 
 - This is a simulated financial research demonstration; it is not integrated with a payment processor and does not move, hold, approve, or reject real money.
 - All recommendations require a human review. LLM synthesis cannot assign probability or change a policy action.
-- The optional LLM path is disabled by default and only accepts generated simulator evidence. It has one request, an 8-second timeout, an output token cap, citations restricted to supplied evidence, and rejects numeric claims. Free-text descriptions are excluded.
+- The optional LLM path is disabled by default and only accepts generated simulator evidence. It has one request, an 8-second timeout, an output token cap, visible evidence citations, and rejects numeric claims and decisive fraud/action language. These lexical checks do not prove semantic entailment. Free-text descriptions are excluded.
 - SQLite, in-memory per-process rate limiting, and the local simulator suit a single-instance demo. They are not substitutes for production auth, a managed database, distributed rate controls, or service-level observability.
 - Synthetic SAML-D results do not establish performance on real institution data. Drift is a score-distribution check and cannot establish performance deterioration without labels.
-- The local feature calculation matches the published schema and point-in-time windows. Same-timestamp order is intentionally excluded to avoid leakage; training artifacts should be verified on the user's accepted sample before operational use.
+- Feature names/order derive from the research project, but source HHI semantics and tied-row behavior are not online-compatible. The loader rejects legacy artifacts; a separately trained and evaluated v2 artifact is required.
 - A public deployment URL is not claimed. See [docs/deployment.md](docs/deployment.md) for deployment setup and remaining artifact requirements.
 
 ## Project description
 
-**RiskLens AI —** Built a standalone FastAPI payment-risk investigation demo with point-in-time behavioral/network features, calibrated XGBoost inference when a trusted artifact is configured, SHAP attribution, deterministic evidence validation, cost-sensitive policy simulation, SQLite case/audit persistence, optional constrained MCP/LLM interfaces, and a 30-scenario integrity evaluation. Historical performance figures are separately attributed to a pinned synthetic SAML-D research source.
+**RiskLens AI —** Built a standalone FastAPI transaction-surveillance demo with versioned point-in-time features, fail-closed model artifact loading, evidence-linked investigations, analyst notes and decisions, cost-policy simulation, SQLite audit traces, optional constrained MCP/LLM interfaces, and an 18-case integrity evaluation. Historical AML research metrics are separately attributed to a pinned synthetic SAML-D source; live scoring requires a separately trained v2 artifact.

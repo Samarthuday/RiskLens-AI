@@ -52,11 +52,11 @@ sequenceDiagram
 
 Feature values, calibrated model probability, SHAP values, decision thresholds, costs, and audit timestamps are computed or loaded locally. A model probability is not an operational risk score; RiskLens displays the probability separately and uses demo policy bands only for presentation. SHAP values are model attribution, not proof or causality.
 
-The investigation workflow is a bounded explicit sequence, not an autonomous agent loop. All evidence tools are registered, typed, and read-only. The optional MCP server exposes a small allow-listed subset and cannot run SQL, access files, call financial services, or change decisions. The optional OpenAI-compatible adapter can only summarize computed evidence from simulator records; it cannot set a probability or recommendation, and its numeric output is rejected. Offline reports use deterministic templates.
+The investigation workflow is a bounded explicit sequence, not an autonomous agent loop. All evidence tools are registered, typed, and read-only. The optional MCP server exposes a small allow-listed subset and cannot run SQL, access files, call financial services, or change decisions. The optional OpenAI-compatible adapter can only summarize computed evidence from simulator records; it cannot set a probability or recommendation, and output must visibly cite known evidence IDs. Numeric and decisive fraud/action language is rejected. These lexical checks improve traceability but do not prove semantic entailment, so summaries remain advisory and the deterministic evidence stays primary. Offline reports use deterministic templates.
 
 ## Feature construction
 
-The ordered fields and transformations are documented in `app/features.py` and `docs/research-foundation.md`. For event (i) at time (t_i), history windows end strictly before (t_i):
+The ordered fields and transformations are documented in `app/features.py` and `docs/research-foundation.md`. RiskLens uses the versioned `risklens-causal-v2` online feature contract. It shares field names with the pinned research pipeline but deliberately does not accept its incompatible HHI artifact. For event (i) at time (t_i), history windows end strictly before (t_i):
 
 \[
 N_{24h}(i)=\sum_j \mathbf{1}[a_j=a_i, c_j=c_i, t_i-24h\le t_j<t_i]
@@ -76,7 +76,7 @@ The sender amount z-score uses the prior 30-day sample mean and sample standard 
 L_{allow}=pC_m,\qquad L_{review}=C_r+(1-p)C_f+p(1-e)C_m.
 \]
 
-The service recommends review when the user/artifact alert threshold and cost break-even rule allow it. This simplified model assumes known calibrated (p), constant costs, and fixed review effectiveness. It excludes loss severity distributions, action spillovers, capacity queues, and realized business outcomes; figures are hypothetical expected costs, not measured savings.
+The service recommends review only when both the configured/model alert threshold and cost break-even rule allow it. The effective threshold is the larger of those values; the report identifies which bound determined the action. This constrained policy assumes known calibrated (p), constant user-defined cost units, and fixed review effectiveness. It excludes loss severity distributions, action spillovers, capacity queues, and realized business outcomes; figures are hypothetical expected costs, not measured savings. At a population size of (N), alert capacity is `ceil(N × budget)`, with a minimum of one.
 
 ## Monitoring and evaluation boundaries
 

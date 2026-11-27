@@ -26,12 +26,14 @@ These are offline results on the synthetic SAML-D held-out test split. They are 
 ## Reused compatibility surface
 
 - Model inputs retain the original ordered schema from `src/models/train.py:MODEL_FEATURES` at the pinned commit.
-- `app/features.py` reproduces the original transaction encodings and prior-window behavioral/network calculations. For each online transaction, the current event is excluded from historical windows.
+- `app/features.py` preserves the ordered source feature names but uses the versioned online contract `risklens-causal-v2`. For each online transaction, the current event is excluded from historical windows. Most encodings and behavioral/network calculations match the pinned source, subject to the explicit differences below.
 - `src/models/calibration.py` retains the exact class import path (`src.models.calibration.ProbabilityCalibrator`) and the original logistic-on-logit calibration implementation needed to deserialize joblib artifacts.
-- Inference uses the artifact's own preprocessor, model, calibrator, feature order, version, and validation-selected decision threshold. Any incompatible schema is rejected.
+- Inference uses the artifact's own preprocessor, model, calibrator, feature order, version, and validation-selected decision threshold. It also requires the exact `feature_schema_version`; matching names alone is not accepted.
 - SHAP is computed against the preprocessed input and XGBoost model. If SHAP fails or cannot align feature names, the report says explanation unavailable rather than filling in guessed values.
 
-Feature transformation differences to review before any deployment: simultaneous transactions with identical timestamps are excluded from one another's historical features to preserve point-in-time safety. The source training query has a lag feature ordered by timestamp only, so tied-row behavior can depend on ordering. A compatible artifact must be checked against representative source samples before operational use.
+**Do not load the source research artifact directly.** The source `sender_counterparty_hhi` calculation groups historical pair balances by the timestamp at which each counterparty is active, so it is not the historical sender/currency concentration that an online transaction can calculate. RiskLens v2 instead computes value-share HHI over all prior counterparties for the same sender and payment currency. The features share a name but do not share semantics. In addition, simultaneous transactions are excluded from one another's online history; the source lag feature orders only by timestamp, so tied-row behavior can depend on input ordering. Artifacts trained with `research-bbe7921-v1` are therefore rejected even when their feature names match.
+
+The contract test suite covers point-in-time exclusion, 24-hour/30-day boundaries, mixed currencies, ties, missing history, HHI behavior, and rejection of an unversioned/legacy artifact. A future `risklens-causal-v2` artifact must be trained and evaluated with this application feature implementation and a licensed dataset before enabling inference. There is currently no such artifact in either checkout, and the SAML-D license does not permit assuming unrestricted deployment use.
 
 ## Artifact availability and recovery
 
@@ -50,13 +52,13 @@ python scripts/run_experiments.py
 shasum -a 256 artifacts/risk_model.joblib
 ```
 
-Confirm that the artifact's redistribution/use terms permit your intended deployment. Copy a trusted artifact to RiskLens `artifacts/risk_model.joblib`, set `RISKLENS_MODEL_PATH`, and set `RISKLENS_MODEL_SHA256` to the resulting digest. The application verifies that checksum if configured and checks the serialized schema before enabling inference. Joblib/pickle artifacts must only come from trusted, pinned training runs.
+That source command creates a legacy artifact and is useful for reproducing the historical research result only. It is **not** loadable by RiskLens v2. To enable RiskLens inference, retrain using an authorized dataset and the v2 online feature builder as the single training and inference transformation, then package an artifact with `feature_schema_version="risklens-causal-v2"`, the exact ordered `features`, and a manifest conforming to [the JSON schema](model-artifact-manifest.schema.json). Record the artifact SHA-256 and configure the required `RISKLENS_MODEL_SHA256`. The loader rejects artifacts without the v2 contract, complete manifest, or matching checksum. Joblib/pickle artifacts must only come from trusted, pinned training runs.
 
 Do not train a replacement on generated toy labels to make the score panel appear enabled. In the absence of the compatible binary, RiskLens returns no probability and keeps the investigation workflow operational in evidence-only mode.
 
 ## Application capability boundary
 
-**Existing source research:** model, calibration, held-out/walk-forward metrics, feature ablations, and SHAP utility functions.
+**Existing source research:** AML suspicious-event model, calibration, held-out/walk-forward metrics, feature ablations, and SHAP utility functions.
 
 **New in RiskLens:** transaction API and simulator, SQLite storage, local online feature calculation, case investigation/state trace, deterministic policy logic, optional model loading, SHAP integration, analyst review, cost simulation, drift comparison, MCP tools, optional synthetic-only LLM narrative, and the integrity evaluation harness.
 

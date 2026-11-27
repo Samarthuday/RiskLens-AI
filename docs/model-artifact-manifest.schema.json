@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://risklens-ai.local/schemas/model-artifact-manifest-v2.json",
+  "title": "RiskLens AI model artifact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "feature_schema_version",
+    "training_code_commit",
+    "source_research_commit",
+    "label_definition",
+    "dataset_name",
+    "dataset_sha256",
+    "training_config_sha256",
+    "split_definition",
+    "calibration_method",
+    "validation_metrics",
+    "training_package_versions"
+  ],
+  "properties": {
+    "feature_schema_version": {"const": "risklens-causal-v2"},
+    "training_code_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_research_commit": {"const": "bbe79212099c9d81c74c643362d52c228db7db08"},
+    "label_definition": {"const": "Is_laundering == 1"},
+    "dataset_name": {"type": "string", "minLength": 1},
+    "dataset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "training_config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "split_definition": {"type": "string", "minLength": 1},
+    "calibration_method": {"type": "string", "minLength": 1},
+    "validation_metrics": {"type": "object", "minProperties": 1},
+    "training_package_versions": {"type": "object", "minProperties": 1}
+  }
+}

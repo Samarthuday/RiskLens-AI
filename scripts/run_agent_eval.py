@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Backward-compatible entry point; evaluates a fixed workflow, not an autonomous agent."""
 import json
 from pathlib import Path
 

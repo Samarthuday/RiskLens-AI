@@ -4,10 +4,10 @@
   "platform": "macOS-26.6.2-arm64-arm-64bit",
   "record_count": 36,
   "feature_latency_ms": {
-    "mean": 0.04029519449330918,
-    "p50": 0.03341650153743103,
-    "p95": 0.0739997540222248,
-    "max": 0.1202080020448193
+    "mean": 0.03877194447138916,
+    "p50": 0.031541498174192384,
+    "p95": 0.06878074782434851,
+    "max": 0.12437500117812306
   },
   "model_loaded": false,
   "model_error": "No trained model artifact installed.",
