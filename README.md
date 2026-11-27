@@ -6,7 +6,7 @@ app_port: 7860
 
 # RiskLens AI
 
-RiskLens AI is a standalone AI-assisted transaction surveillance workspace built on a pinned rare-event financial ML research project. The source model target is synthetic AML suspicious activity; it is not a payment-fraud, chargeback, or realized-loss model. The app combines a seeded transaction stream, causal point-in-time features, version-gated model loading, evidence-linked investigations, a persistent analyst workflow, and SQLite audit records.
+RiskLens AI is an evidence-driven investigation workspace for a risk or operations analyst deciding whether unusual activity warrants further review. The user can inspect a transaction, compare it with earlier observed activity, examine supporting and weakening evidence, and save a human disposition. Its research model target is suspicious activity in synthetic AML data; it is not a payment-fraud, chargeback, or realized-loss model.
 
 The application runs without credentials or a model artifact. In that mode it still demonstrates transaction ingestion, historical features, evidence retrieval, investigation report validation, and analyst review, while explicitly returning **no model probability**. It never substitutes random predictions or hand-authored alert scores.
 
@@ -16,9 +16,9 @@ The application runs without credentials or a model artifact. In that mode it st
 
 1. Start the app with `uvicorn app.main:app --host 0.0.0.0 --port 7860` and open <http://localhost:7860>.
 2. Reset the **Burst pattern** demo. The simulator creates 36 reproducible synthetic records with no exposed target labels.
-3. Open a transaction. RiskLens reopens its saved case when one exists; otherwise it retrieves earlier activity and creates an evidence-linked report.
+3. Open a transaction and select **Run investigation**. RiskLens retrieves earlier activity, calculates indicators, optionally scores with a compatible model, validates source references, and saves an evidence-linked report. Existing cases reopen without duplication.
 4. This checkout has no `risklens-causal-v2` model artifact, so it displays evidence and uncertainty without a model probability or SHAP attribution. Source model artifacts with the old HHI definition are rejected.
-5. Record an analyst decision and note; reopen the case to see the saved decision and measured workflow trace.
+5. Record an analyst decision and note; reopen the case to see the saved decision, revisions, and workflow trace.
 6. Change expected-cost inputs and run the policy simulator. Its estimates are hypothetical and do not claim measured savings.
 7. Use **Research provenance** to distinguish the historical SAML-D results from app measurements.
 
@@ -35,12 +35,13 @@ charts, with no frontend runtime dependencies or external assets.
 - Save analyst decisions and notes together, keep review revisions in the case history, and export a case as JSON.
 - Explore hypothetical policy costs with explicit assumptions; historical research performance stays in the provenance view.
 
-Lists show up to the latest 500 records. The demo is single-instance: simulator
-resets affect this database and remove simulated cases. It has no per-visitor
-isolation or user authentication. For local development, run `python
-scripts/dev.py` (port 3000) or `npm run dev` after installing Python dependencies.
+Lists show up to the latest 500 records. The public app uses browser-session
+database isolation; resets affect only that session. Sessions are disposable,
+unauthenticated demos, with a seven-day cookie lifetime and 30-day inactive data
+cleanup. For local development, run `python scripts/dev.py` (port 3000) or
+`npm run dev` after installing Python dependencies.
 
-- FastAPI REST API and responsive dark dashboard; OpenAPI at `/api/docs`.
+- FastAPI REST API and responsive dashboard; OpenAPI at `/api/docs`.
 - Seeded simulation with routine and burst modes; start, pause, step, and reset controls.
 - Parameterized SQLite persistence for transactions, cases, prediction latency, and append-only audit events.
 - Strict Pydantic transaction and investigation schemas, idempotent transaction ingestion, and a 1 MB body and per-process request limit.
@@ -57,11 +58,16 @@ scripts/dev.py` (port 3000) or `npm run dev` after installing Python dependencie
 
 The following are copied from the source repository report at the pinned commit; they are historical held-out results on synthetic SAML-D data, not new RiskLens results and not live monitoring metrics.
 
-| Historical research metric | Reported result |
-|---|---:|
-| PR-AUC | 0.9859286 |
-| ROC-AUC | 0.9998338 |
-| Recall at top 0.1% alert budget | 83.8843% |
+| Historical research metric | Value | Version and scope |
+|---|---:|---|
+| PR-AUC | 0.9859286 | source model 2.1.0 · SAML-D · held-out synthetic AML test split |
+| ROC-AUC | 0.9998338 | source model 2.1.0 · SAML-D · held-out synthetic AML test split |
+| Recall at top 0.1% alert budget | 83.8843% | source model 2.1.0 · SAML-D · held-out synthetic AML test split |
+
+RiskLens v2 model results, AI investigation comparisons, human-study results,
+and hosted-service measurements are not published until measured for their own
+version and sample. No live URL or analyst time-savings claim is currently
+verified.
 
 Metric provenance, other reported scores, the artifact gap, and the feature compatibility notes are in [docs/research-foundation.md](docs/research-foundation.md). App latency and scenario-evaluation output are written from actual local runs; they are not filled with sample values.
 
@@ -82,7 +88,7 @@ The database defaults to `data/risklens.sqlite3`. It is local and ignored by Git
 
 ### Optional validated model artifact
 
-This checkout intentionally contains no model binary or licensed SAML-D data. The historical research artifact is not compatible with RiskLens's corrected HHI semantics and will be rejected. See [docs/research-foundation.md](docs/research-foundation.md) for provenance and the requirements for a separately trained v2 artifact. Once you have a trusted compatible artifact:
+This checkout intentionally contains no model binary or licensed SAML-D data. The historical research artifact is not compatible with RiskLens's corrected HHI semantics and will be rejected. See [docs/research-foundation.md](docs/research-foundation.md) for provenance and the new v2 feature/training commands. The upstream dataset is marked CC BY-NC-SA 4.0; confirm the intended use and distribution rights before using or publishing a derived model. Once authorized and trained, verify the artifact with:
 
 ```bash
 mkdir -p artifacts
@@ -134,9 +140,10 @@ Risk bands are demo policy cutoffs (low `<0.05`, medium `0.05–0.20`, high `0.2
 pytest -q
 ruff check app scripts tests src
 python scripts/run_investigation_eval.py
+python scripts/verify_artifact.py --artifact build/risk_model.joblib --sha256 YOUR_TRUSTED_SHA256
 ```
 
-The investigation integrity evaluation has 18 varied routine, burst, unusual-legitimate, missing-history, contradictory-evidence, and prompt-injection-text cases. Each metric reports its applicable-case denominator; inapplicable checks are excluded rather than counted as passes. It measures deterministic report integrity and prompt-text isolation. It does not evaluate agent tool choice, model accuracy, comparative usefulness, or LLM quality; no compatible model artifact or adjudicated outcome labels are distributed with this repository.
+The investigation integrity evaluation has 18 varied routine, burst, unusual-legitimate, missing-history, contradictory-evidence, and prompt-injection-text cases. Each metric reports its applicable-case denominator; inapplicable checks are excluded rather than counted as passes. It measures deterministic report integrity and prompt-text isolation. It does not evaluate agent tool choice, model accuracy, comparative usefulness, or LLM quality. No v2 metric is reported until a real training/evaluation run completes and dataset rights are cleared.
 
 ## Security and limitations
 

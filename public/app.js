@@ -69,6 +69,9 @@ const state = {
   currency: "all",
   status: "all",
   payment: "all",
+  modelBand: "all",
+  disposition: "all",
+  paymentStatus: "all",
   sort: "timestamp",
   direction: -1,
   tablePage: 1,
@@ -303,6 +306,15 @@ function filteredTransactions() {
         )) &&
       (state.currency === "all" || t.payment_currency === state.currency) &&
       (state.payment === "all" || t.payment_type === state.payment) &&
+      (state.modelBand === "all" ||
+        (state.modelBand === "unscored" && (t.model_probability === null || t.model_probability === undefined)) ||
+        (state.modelBand === "low" && t.model_probability < 0.05) ||
+        (state.modelBand === "medium" && t.model_probability >= 0.05 && t.model_probability < 0.2) ||
+        (state.modelBand === "high" && t.model_probability >= 0.2 && t.model_probability < 0.5) ||
+        (state.modelBand === "critical" && t.model_probability >= 0.5)) &&
+      (state.disposition === "all" ||
+        (state.disposition === "unreviewed" && !t.review_decision) ||
+        t.review_decision === state.disposition) &&
       (state.status === "all" ||
         (state.status === "uninvestigated" && !t.investigation_id) ||
         (state.status === "open" && t.case_status === "open") ||
@@ -344,7 +356,7 @@ function renderTransactionTable(compact = false) {
     )
     .join(
       "",
-    )}</select><select id="filter-currency" aria-label="Filter by currency">${currencyOptions(state.currency)}</select>${
+    )}</select><select id="filter-model-band" aria-label="Filter by model band">${[["all", "All model bands"], ["unscored", "Unscored"], ["low", "Low (<5%)"], ["medium", "Medium (5–20%)"], ["high", "High (20–50%)"], ["critical", "Critical (≥50%)"]].map(([v, l]) => `<option value="${v}" ${state.modelBand === v ? "selected" : ""}>${l}</option>`).join("")}</select><select id="filter-disposition" aria-label="Filter by analyst disposition">${[["all", "All dispositions"], ["unreviewed", "No disposition"], ["accepted", "Accepted"], ["dismissed", "Dismissed"], ["escalated", "Escalated"]].map(([v, l]) => `<option value="${v}" ${state.disposition === v ? "selected" : ""}>${l}</option>`).join("")}</select><select id="filter-currency" aria-label="Filter by currency">${currencyOptions(state.currency)}</select>${
     !compact
       ? `<select id="filter-payment" aria-label="Filter by payment method"><option value="all">All methods</option>${[
           ...new Set(state.transactions.map((t) => t.payment_type)),
@@ -413,6 +425,7 @@ function renderPolicy() {
     missed_fraud_cost: "100",
     false_positive_cost: "1",
     manual_review_cost: "0.25",
+    review_effectiveness: "0.8",
   };
   return (
     heading(
@@ -425,6 +438,7 @@ function renderPolicy() {
       ["missed_fraud_cost", "Missed-event cost", "0.01", "1000000000"],
       ["false_positive_cost", "False-positive cost", "0.01", "1000000000"],
       ["manual_review_cost", "Cost per review", "0.01", "1000000000"],
+      ["review_effectiveness", "Assumed review effectiveness (0–1)", "0.01", "1"],
     ]
       .map(
         ([name, text, step, max]) =>
@@ -432,7 +446,7 @@ function renderPolicy() {
       )
       .join(
         "",
-      )}</div><div class="assumption">All costs use the same arbitrary unit. Review effectiveness is assumed to be 80%. This estimates expected costs; it does not measure financial savings.</div><div class="button-row"><button type="submit" class="button primary">${icon("sliders")}Compare policy costs</button></div></form></article><article class="card"><div class="card-head"><div><h2>Policy comparison</h2><p>Your assumptions, made visible</p></div></div><div id="policy-result" class="policy-result">${renderPolicyResult()}</div></article></div>`
+      )}</div><div class="assumption">All costs use the same arbitrary unit. Review effectiveness is an adjustable assumption, not a measured team outcome. This estimates expected costs; it does not measure financial savings.</div><div class="button-row"><button type="submit" class="button primary">${icon("sliders")}Compare policy costs</button></div></form></article><article class="card"><div class="card-head"><div><h2>Policy comparison</h2><p>Your assumptions, made visible</p></div></div><div id="policy-result" class="policy-result">${renderPolicyResult()}</div></article></div>`
   );
 }
 function renderPolicyResult() {
@@ -454,7 +468,7 @@ function renderMonitoring() {
       "Measured application activity, with clear availability boundaries.",
       `<button class="button" data-action="refresh">${icon("refresh")}Refresh checks</button>`,
     ) +
-    `<div class="stats-grid">${stat("Inference calls", number(m.predictions_recorded), `${number(m.unique_transactions_scored)} unique transactions`, "pulse")}${stat("Inference p50", m.latency_p50_ms === null ? "—" : `${numeric(m.latency_p50_ms).toFixed(1)} ms`, "Model inference only", "clock")}${stat("Inference p95", m.latency_p95_ms === null ? "—" : `${numeric(m.latency_p95_ms).toFixed(1)} ms`, "Not full investigation latency", "chart")}${stat("Audit events", number(m.audit_event_count), "Recorded workflow activity", "file")}</div><div class="section-grid"><article class="card"><div class="card-head"><div><h2>Service readiness</h2><p>Current runtime state</p></div></div><div class="status-list"><div class="status-row"><span>Application API</span>${badge("Connected", "green")}</div><div class="status-row"><span>Transaction storage</span>${badge("Available", "green")}</div><div class="status-row"><span>Model inference</span>${badge(loaded ? "Available" : "Not configured", loaded ? "green" : "neutral")}</div><div class="status-row"><span>Outcome labels</span>${badge("Not available")}</div><div class="status-row"><span>Simulation</span>${badge(state.streamTimer ? "Streaming" : "Paused", state.streamTimer ? "green" : "neutral")}</div></div></article><article class="card"><div class="card-head"><div><h2>Score-distribution drift</h2><p>Shift is a signal, not proof of model degradation.</p></div></div><div class="padded">${d?.status === "measured" ? `<div class="stat-value">${d.population_stability_index.toFixed(3)}</div><p class="prose">Population Stability Index across ${d.observations} inference observations.</p>${badge(d.drift_alert ? "Shift threshold exceeded" : "Below shift threshold", d.drift_alert ? "amber" : "green")}` : empty(d?.status === "insufficient_sample" ? "More observations needed" : "Drift comparison unavailable", d?.detail || `At least ${d?.minimum_observations || 20} observations and a compatible model baseline are required.`)}<div class="assumption">No fraud accuracy or loss-reduction metrics are inferred from an unlabeled synthetic stream.</div></div></article></div><div class="bottom-grid">${renderModelCard()}<article class="card padded prose"><h3 style="margin-top:0">Operational scope</h3><p>This workspace is a single-instance research demonstration. Synthetic reset controls affect this instance. It is not a multi-tenant payment control system.</p><a class="button" href="/api/docs" target="_blank" rel="noopener">${icon("file")}Open API documentation</a></article></div>`
+    `<div class="stats-grid">${stat("Inference calls", number(m.predictions_recorded), `${number(m.unique_transactions_scored)} unique transactions`, "pulse")}${stat("Inference p50", m.latency_p50_ms === null ? "—" : `${numeric(m.latency_p50_ms).toFixed(1)} ms`, "Model inference only", "clock")}${stat("Inference p95", m.latency_p95_ms === null ? "—" : `${numeric(m.latency_p95_ms).toFixed(1)} ms`, "Model inference only", "chart")}${stat("Investigation p95", m.full_flow_investigation_p95_ms == null ? "—" : `${numeric(m.full_flow_investigation_p95_ms).toFixed(1)} ms`, "Full API request · ${number(m.request_count)} observations", "clock")}${stat("Request failures", m.request_failure_rate == null ? "—" : `${(m.request_failure_rate * 100).toFixed(1)}%`, `${number(m.request_failure_count)} HTTP 5xx`, "info")}${stat("Tool failures", number(m.tool_failure_count), `${number(m.llm_fallback_count)} narrative fallbacks`, "file")}${stat("Abstentions", number(m.abstention_count), "No compatible model probability", "shield")}${stat("Audit events", number(m.audit_event_count), "Recorded workflow activity", "file")}</div><div class="section-grid"><article class="card"><div class="card-head"><div><h2>Service readiness</h2><p>Current runtime state</p></div></div><div class="status-list"><div class="status-row"><span>Application API</span>${badge("Connected", "green")}</div><div class="status-row"><span>Transaction storage</span>${badge("Available", "green")}</div><div class="status-row"><span>Model inference</span>${badge(loaded ? "Available" : "Not configured", loaded ? "green" : "neutral")}</div><div class="status-row"><span>Outcome labels</span>${badge("Not available")}</div><div class="status-row"><span>Simulation</span>${badge(state.streamTimer ? "Streaming" : "Paused", state.streamTimer ? "green" : "neutral")}</div></div></article><article class="card"><div class="card-head"><div><h2>Score-distribution drift</h2><p>Shift is a signal, not proof of model degradation.</p></div></div><div class="padded">${d?.status === "measured" ? `<div class="stat-value">${d.population_stability_index.toFixed(3)}</div><p class="prose">Population Stability Index across ${d.observations} inference observations.</p>${badge(d.drift_alert ? "Shift threshold exceeded" : "Below shift threshold", d.drift_alert ? "amber" : "green")}` : empty(d?.status === "insufficient_sample" ? "More observations needed" : "Drift comparison unavailable", d?.detail || `At least ${d?.minimum_observations || 20} observations and a compatible model baseline are required.`)}<div class="assumption">No fraud accuracy or loss-reduction metrics are inferred from an unlabeled synthetic stream.</div></div></article></div><div class="bottom-grid">${renderModelCard()}<article class="card padded prose"><h3 style="margin-top:0">Operational scope</h3><p>Each browser session has its own synthetic database and simulator. Sessions expire and are unauthenticated demos, not payment-control accounts.</p><a class="button" href="/api/docs" target="_blank" rel="noopener">${icon("file")}Open API documentation</a></article></div>`
   );
 }
 function renderResearch() {
@@ -605,11 +619,16 @@ function exportCsv() {
     "model_probability",
     "case_status",
     "review_decision",
+    "exported_at_utc",
+    "export_scope",
+    "record_provenance",
   ];
+  const exportedAt = new Date().toISOString();
+  const scope = `latest ${state.transactions.length} of ${state.total} loaded; client-side filters`;
   const csv = rows.map((row) =>
     columns
       .map((key) => {
-        let value = String(row[key] ?? "");
+        let value = String(key === "exported_at_utc" ? exportedAt : key === "export_scope" ? scope : key === "record_provenance" ? row.source || "unknown" : row[key] ?? "");
         if (/^[\s]*[=+@-]/.test(value)) value = "'" + value;
         return '"' + value.replaceAll('"', '""') + '"';
       })
@@ -955,6 +974,7 @@ async function submitPolicy(event) {
       missed_fraud_cost: Number(draft.missed_fraud_cost),
       false_positive_cost: Number(draft.false_positive_cost),
       manual_review_cost: Number(draft.manual_review_cost),
+      review_effectiveness: Number(draft.review_effectiveness),
     });
     if (state.page === "policy") {
       $("policy-result").innerHTML = renderPolicyResult();
@@ -1058,6 +1078,14 @@ document.addEventListener("change", (event) => {
   const id = event.target.id;
   if (id === "filter-status") {
     state.status = event.target.value;
+    filterRender();
+  }
+  if (id === "filter-model-band") {
+    state.modelBand = event.target.value;
+    filterRender();
+  }
+  if (id === "filter-disposition") {
+    state.disposition = event.target.value;
     filterRender();
   }
   if (id === "filter-currency") {
@@ -1169,6 +1197,9 @@ document.addEventListener("click", async (event) => {
     state.currency = "all";
     state.status = "all";
     state.payment = "all";
+    state.modelBand = "all";
+    state.disposition = "all";
+    state.paymentStatus = "all";
     filterRender();
   }
   if (action === "seed") {

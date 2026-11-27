@@ -38,6 +38,7 @@ class PolicyInput(BaseModel):
     false_positive_cost: float = Field(ge=0)
     missed_event_cost: float = Field(ge=0)
     manual_review_cost: float = Field(ge=0)
+    review_effectiveness: float = Field(ge=0, le=1)
 
 
 @dataclass(frozen=True)
@@ -126,7 +127,10 @@ def build_tool_registry(store, artifact, review_threshold: float) -> ToolRegistr
         return explain_model(artifact, args["feature_vector"])
 
     def policy(args):
-        return recommend(args["probability"], args["threshold"], PolicyCosts(args["false_positive_cost"], args["missed_event_cost"], args["manual_review_cost"]))
+        return recommend(args["probability"], args["threshold"], PolicyCosts(
+            args["false_positive_cost"], args["missed_event_cost"],
+            args["manual_review_cost"], args["review_effectiveness"],
+        ))
 
     for spec in (
         ToolSpec("get_transaction", "Retrieve allow-listed transaction fields.", TransactionLookup, get_transaction),

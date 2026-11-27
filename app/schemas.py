@@ -47,6 +47,7 @@ class InvestigationRequest(BaseModel):
     false_positive_cost: float = Field(default=1.0, ge=0)
     missed_event_cost: float = Field(default=100.0, ge=0, validation_alias=AliasChoices("missed_event_cost", "missed_fraud_cost"))
     manual_review_cost: float = Field(default=0.25, ge=0)
+    review_effectiveness: float = Field(default=0.8, ge=0, le=1)
     review_threshold: float | None = Field(default=None, gt=0, lt=1)
 
 
@@ -125,6 +126,7 @@ class PolicySimulationRequest(BaseModel):
     false_positive_cost: float = Field(default=1.0, ge=0)
     missed_event_cost: float = Field(default=100.0, ge=0, validation_alias=AliasChoices("missed_event_cost", "missed_fraud_cost"))
     manual_review_cost: float = Field(default=0.25, ge=0)
+    review_effectiveness: float = Field(default=0.8, ge=0, le=1)
 
     @field_validator("probabilities")
     @classmethod
