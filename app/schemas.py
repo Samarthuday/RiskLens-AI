@@ -96,6 +96,8 @@ class InvestigationReport(BaseModel):
     human_review_required: bool = True
     review_decision: Literal["accepted", "dismissed", "escalated"] | None = None
     analyst_note: str = ""
+    reviewed_at: datetime | None = None
+    review_history: list[dict[str, str]] = Field(default_factory=list)
     tool_calls: int = 0
     latency_ms: float = 0
     report_mode: Literal["deterministic_template", "llm_assisted"] = "deterministic_template"
@@ -105,6 +107,11 @@ class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: Literal["accepted", "dismissed", "escalated"]
     analyst_note: str = Field(default="", max_length=1000)
+
+    @field_validator("analyst_note")
+    @classmethod
+    def trim_note(cls, value: str) -> str:
+        return value.strip()
 
 
 class TransactionScoreRequest(BaseModel):

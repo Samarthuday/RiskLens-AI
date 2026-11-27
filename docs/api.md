@@ -32,6 +32,8 @@ curl -X POST http://localhost:7860/api/v1/transactions \
 
 Posting the same ID and identical content returns an idempotent replay. Reusing an ID with different fields returns HTTP 409. Entity fields are only used to retrieve past data and are excluded from model input.
 
+`GET /api/v1/transactions?limit=100` returns the loaded items, page count, total stored count, and any latest persisted score and case disposition. Account history is available at `GET /api/v1/transactions/{id}/history?limit=50`; it is bounded to 100 rows and includes only strictly earlier transactions involving the selected sender or receiver.
+
 ## Investigate and review
 
 ```bash
@@ -44,6 +46,8 @@ curl -X POST http://localhost:7860/api/v1/cases/inv_<id>/review \
 ```
 
 Without a compatible model, the report contains `model_risk_probability: null`, `risk_classification: "unavailable"`, and `recommended_action: "insufficient_evidence"`. With a model installed, `POST /api/v1/risk/score` takes `{"transaction_id":"..."}` and returns the calibrated probability, threshold, model version, warnings, and measured inference latency.
+
+Review decisions and notes are appended to the persisted `review_history` and to the investigation trace. Each update saves the report and audit event atomically.
 
 ## Cost simulator
 

@@ -24,6 +24,22 @@ The application runs without credentials or a model artifact. In that mode it st
 
 ## What is implemented
 
+### Dashboard workspace
+
+The dashboard separates Overview, Transactions, Case inbox, Policy lab, System
+health, and Research foundation. It uses local CSS, JavaScript, SVG icons, and
+charts, with no frontend runtime dependencies or external assets.
+
+- Search IDs and accounts; filter, sort, paginate, and export the recent transaction window as CSV.
+- Reopen saved cases, inspect evidence and bounded prior account activity, and review persisted workflow events.
+- Save analyst decisions and notes together, keep review revisions in the case history, and export a case as JSON.
+- Explore hypothetical policy costs with explicit assumptions; historical research performance stays in the provenance view.
+
+Lists show up to the latest 500 records. The demo is single-instance: simulator
+resets affect this database and remove simulated cases. It has no per-visitor
+isolation or user authentication. For local development, run `python
+scripts/dev.py` (port 3000) or `npm run dev` after installing Python dependencies.
+
 - FastAPI REST API and responsive dark dashboard; OpenAPI at `/api/docs`.
 - Seeded simulation with routine and burst modes; start, pause, step, and reset controls.
 - Parameterized SQLite persistence for transactions, cases, prediction latency, and append-only audit events.

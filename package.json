@@ -1,0 +1,8 @@
+{
+  "name": "risklens-dashboard",
+  "private": true,
+  "scripts": {
+    "dev": "python scripts/dev.py",
+    "check": "node --check public/app.js"
+  }
+}

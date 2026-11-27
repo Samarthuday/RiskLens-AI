@@ -179,7 +179,9 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
     @app.get("/api/v1/transactions")
     async def list_transactions(limit: int = Query(100, ge=1, le=500)):
         rows = store.list_transactions(limit)
-        return {"items": [_public_transaction(row) for row in rows], "count": len(rows)}
+        with store.connect() as db:
+            total = db.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+        return {"items": [_public_transaction(row) for row in rows], "count": len(rows), "total": total}
 
     @app.get("/api/v1/transactions/{transaction_id}")
     async def get_transaction(transaction_id: str):
@@ -187,6 +189,14 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
         if row is None:
             raise HTTPException(404, "transaction not found")
         return _public_transaction(row)
+
+    @app.get("/api/v1/transactions/{transaction_id}/history")
+    async def transaction_history(transaction_id: str, limit: int = Query(50, ge=1, le=100)):
+        row = store.get_transaction(transaction_id)
+        if row is None:
+            raise HTTPException(404, "transaction not found")
+        items, total = store.transaction_history(row, limit)
+        return {"items": [_public_transaction(item) for item in items], "count": len(items), "total": total}
 
     @app.post("/api/v1/risk/score")
     async def score_transaction(payload: TransactionScoreRequest):
@@ -250,14 +260,9 @@ def create_app(model_path: Path | None = None, database_path: Path | None = None
 
     @app.post("/api/v1/cases/{case_id}/review")
     async def review_case(case_id: str, payload: ReviewRequest):
-        report = store.get_investigation(case_id)
+        report = store.record_review(case_id, payload.decision, payload.analyst_note)
         if report is None:
             raise HTTPException(404, "case not found")
-        report["status"] = "reviewed"
-        report["review_decision"] = payload.decision
-        report["analyst_note"] = payload.analyst_note.strip()
-        store.update_investigation(report)
-        store.audit(case_id, report["transaction_id"], "human_review_recorded", {"decision": payload.decision, "analyst_note": report["analyst_note"]})
         return report
 
     @app.get("/api/v1/monitoring/metrics")
