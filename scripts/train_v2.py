@@ -80,6 +80,13 @@ def top_k_mask(probabilities: np.ndarray, rate: float) -> np.ndarray:
     return mask
 
 
+def threshold_at_alert_budget(probabilities: np.ndarray, rate: float) -> float:
+    """Choose a score cutoff from this model's validation scores at the requested capacity."""
+    values = np.asarray(probabilities, dtype=float)
+    threshold = float(values[top_k_mask(values, rate)].min())
+    return min(threshold, float(np.nextafter(1.0, 0.0)))
+
+
 def metrics(y: np.ndarray, p: np.ndarray, threshold: float, alert_rate: float) -> dict:
     p = np.clip(np.asarray(p, dtype=float), 1e-8, 1 - 1e-8)
     y = np.asarray(y, dtype=int)
@@ -96,6 +103,8 @@ def metrics(y: np.ndarray, p: np.ndarray, threshold: float, alert_rate: float) -
         "log_loss": float(log_loss(y, p)), "decision_threshold": float(threshold),
         "threshold_confusion": {"true_positive": tp, "false_positive": fp, "false_negative": fn,
                                 "true_negative": int(len(y) - tp - fp - fn)},
+        "threshold_alert_count": int(alerts.sum()),
+        "realized_threshold_alert_rate": float(alerts.mean()),
         "threshold_precision": tp / (tp + fp) if tp + fp else 0.0,
         "threshold_recall": tp / (tp + fn) if tp + fn else 0.0,
         "alert_budget": alert_rate, "top_budget_alert_count": int(top_alerts.sum()),
@@ -188,16 +197,17 @@ def train(features: Path, metadata_path: Path, config_path: Path, artifact_path:
     validation_raw = model.predict_proba(x_validation)[:, 1]
     validation_probabilities = calibrator.predict(validation_raw)
     alert_rate = float(config["alert_rate"])
-    threshold = float(validation_probabilities[top_k_mask(validation_probabilities, alert_rate)].min())
-    threshold = min(threshold, float(np.nextafter(1.0, 0.0)))
+    threshold = threshold_at_alert_budget(validation_probabilities, alert_rate)
     test_probabilities = calibrator.predict(model.predict_proba(x_test)[:, 1])
 
     baseline = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=int(config["random_state"]))
     baseline.fit(x_train, y_train)
     baseline_calibrator = ProbabilityCalibrator().fit(baseline.predict_proba(x_cal)[:, 1], y_cal)
+    baseline_validation_probabilities = baseline_calibrator.predict(baseline.predict_proba(x_validation)[:, 1])
+    baseline_threshold = threshold_at_alert_budget(baseline_validation_probabilities, alert_rate)
     baseline_test_probabilities = baseline_calibrator.predict(baseline.predict_proba(x_test)[:, 1])
     test_metrics = metrics(test[TARGET].to_numpy(), test_probabilities, threshold, alert_rate)
-    baseline_metrics = metrics(test[TARGET].to_numpy(), baseline_test_probabilities, threshold, alert_rate)
+    baseline_metrics = metrics(test[TARGET].to_numpy(), baseline_test_probabilities, baseline_threshold, alert_rate)
     bootstrap = block_bootstrap_ci(test, test_probabilities, alert_rate, int(config["random_state"]))
 
     try:
@@ -231,6 +241,7 @@ def train(features: Path, metadata_path: Path, config_path: Path, artifact_path:
         "features": MODEL_FEATURES, "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "decision_threshold": threshold, "alert_rate": alert_rate,
         "test_metrics": test_metrics, "baseline_test_metrics": baseline_metrics,
+        "baseline_decision_threshold": baseline_threshold,
         "test_confidence_intervals": bootstrap,
         "validation_probability_quantiles": [float(value) for value in np.quantile(validation_probabilities, np.linspace(0, 1, 1001))],
         "training_counts": counts, "training_config": config,
@@ -246,6 +257,7 @@ def train(features: Path, metadata_path: Path, config_path: Path, artifact_path:
                "label_definition": manifest["label_definition"], "dataset_sha256": manifest["dataset_sha256"],
                "training_code_commit": code_commit, "training_config_sha256": manifest["training_config_sha256"],
                "split_counts": counts, "decision_threshold": threshold, "alert_rate": alert_rate,
+               "baseline_decision_threshold": baseline_threshold,
                "test_metrics": test_metrics, "baseline_test_metrics": baseline_metrics,
                "test_confidence_intervals": bootstrap, "subgroup_metrics": group_metrics(test, test_probabilities, threshold),
                "training_package_versions": packages, "measured_at": datetime.now(timezone.utc).isoformat(),

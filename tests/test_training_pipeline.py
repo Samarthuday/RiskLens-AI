@@ -8,7 +8,7 @@ import pytest
 
 from app.features import build_feature_vector
 from scripts.build_training_features import build_features
-from scripts.train_v2 import metrics, temporal_split, top_k_mask
+from scripts.train_v2 import metrics, temporal_split, threshold_at_alert_budget, top_k_mask
 
 
 def test_v2_batch_feature_builder_matches_online_point_in_time_contract(tmp_path):
@@ -70,3 +70,19 @@ def test_threshold_metrics_and_top_k_counts_are_explicit():
     result = metrics(labels, probabilities, .8, .5)
     assert result["threshold_confusion"] == {"true_positive": 2, "false_positive": 0, "false_negative": 0, "true_negative": 2}
     assert result["recall_at_alert_budget"] == 1
+    assert result["threshold_alert_count"] == 2
+    assert result["realized_threshold_alert_rate"] == .5
+
+
+def test_each_model_selects_its_threshold_from_its_own_validation_scores():
+    xgboost_validation = np.array([.95, .80, .25, .10])
+    baseline_validation = np.array([.61, .60, .59, .58])
+    xgboost_threshold = threshold_at_alert_budget(xgboost_validation, .25)
+    baseline_threshold = threshold_at_alert_budget(baseline_validation, .25)
+
+    assert xgboost_threshold == .95
+    assert baseline_threshold == .61
+    assert xgboost_threshold != baseline_threshold
+    test_result = metrics(np.array([1, 0, 1, 0]), baseline_validation, baseline_threshold, .25)
+    assert test_result["decision_threshold"] == baseline_threshold
+    assert test_result["realized_threshold_alert_rate"] == .25

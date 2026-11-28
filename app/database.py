@@ -45,6 +45,7 @@ class Store:
             candidate.unlink(missing_ok=True)
             candidate.with_name(candidate.name + "-wal").unlink(missing_ok=True)
             candidate.with_name(candidate.name + "-shm").unlink(missing_ok=True)
+            self._initialized_paths.discard(candidate)
 
         files = list(directory.glob("*.sqlite3"))
         for candidate in files:
@@ -71,10 +72,11 @@ class Store:
         session_id = ACTIVE_SESSION_ID.get()
         target = self.session_path(session_id) if session_id else self.path
         target.parent.mkdir(parents=True, exist_ok=True)
+        was_missing = not target.exists()
         db = sqlite3.connect(target, timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
-        if target not in self._initialized_paths:
+        if was_missing or target not in self._initialized_paths:
             self._initialize_connection(db)
             self._initialized_paths.add(target)
         return db

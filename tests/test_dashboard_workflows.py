@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -116,6 +117,32 @@ def test_browser_sessions_isolate_storage_resets_and_simulator_state(tmp_path):
     assert first.post("/api/v1/simulation/reset?count=2").status_code == 200
     assert first.get("/api/v1/monitoring/metrics").json()["transaction_count"] == 2
     assert second.get("/api/v1/monitoring/metrics").json()["transaction_count"] == 0
+
+
+def test_evicted_session_cookie_reinitializes_its_database(tmp_path, monkeypatch):
+    import app.main as main_module
+    from app.config import Settings
+
+    settings = Settings()
+    settings.max_demo_sessions = 1
+    settings.session_secret = "test-session-secret-with-enough-entropy-for-signer"
+    monkeypatch.setattr(main_module, "get_settings", lambda: settings)
+    app = main_module.create_app(tmp_path / "missing.joblib", tmp_path / "shared.sqlite3", session_isolation=True)
+    first, second, third = (TestClient(app) for _ in range(3))
+
+    assert first.get("/api/v1/monitoring/metrics").status_code == 200
+    session_files = list((tmp_path / "sessions").glob("*.sqlite3"))
+    assert len(session_files) == 1
+    first_database = session_files[0]
+    os.utime(first_database, (1, 1))
+
+    assert second.get("/api/v1/monitoring/metrics").status_code == 200
+    assert third.get("/api/v1/monitoring/metrics").status_code == 200
+    assert not first_database.exists()
+
+    returned = first.get("/api/v1/monitoring/metrics")
+    assert returned.status_code == 200
+    assert returned.json()["transaction_count"] == 0
 
 
 def test_razorpay_test_webhook_signature_dedup_and_out_of_order_events(tmp_path, monkeypatch):
